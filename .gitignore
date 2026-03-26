@@ -1,0 +1,40 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+.env.local
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Build / temp
+tmp/
+.cache/
+.runtime/
+playwright-report/
+test-results/
+*.tsbuildinfo
+apps/*/dist/
+apps/*/vite.config.js
+apps/*/vite.config.d.ts
+
+# Alembic / local DB artifacts
+*.sqlite
+*.sqlite3

@@ -1,0 +1,26 @@
+{
+  "name": "cjhx-skill-hub",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.8.1",
+  "scripts": {
+    "dev:portal": "pnpm --filter portal-web dev",
+    "dev:admin": "pnpm --filter admin-web dev",
+    "dev:api": "cd apps/api-server && .venv/bin/uvicorn app.main:app --reload",
+    "local:start": "bash infra/scripts/start-local-stack.sh",
+    "local:ensure": "bash infra/scripts/ensure-local-stack.sh",
+    "local:stop": "bash infra/scripts/stop-local-stack.sh",
+    "serve:api": "cd apps/api-server && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000",
+    "seed:local-workbench": "cd apps/api-server && .venv/bin/python scripts/seed_local_workbench_data.py",
+    "db:export-init-sql": "bash infra/scripts/export-init-sql.sh",
+    "preview:portal": "pnpm --filter portal-web preview",
+    "preview:admin": "pnpm --filter admin-web preview",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test:e2e": "playwright test",
+    "release:check": "bash infra/scripts/release-check.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2"
+  }
+}
