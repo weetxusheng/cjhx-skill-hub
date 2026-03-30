@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 import ipaddress
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
-from sqlalchemy import delete, desc, func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import CurrentUser
 from app.core.config import get_settings
@@ -23,7 +22,6 @@ from app.models.skill_user_grant import SkillUserGrant
 from app.models.skill_version import SkillVersion
 from app.models.user import User
 from app.models.user_role import UserRole
-from app.models.version_review import VersionReview
 from app.repositories.skills import (
     AdminSkillListParams,
     PublicSkillListParams,
@@ -43,12 +41,14 @@ from app.repositories.skills import (
     is_skill_favorited,
     list_admin_skills_all,
     list_admin_skills_paginated,
+    list_portal_upload_records_paginated,
     list_public_skills_paginated,
 )
 from app.schemas.admin import (
     AdminAuditLogItem,
     AdminReviewListItem,
     AdminUserListItem,
+    DepartmentBrief,
     PendingReleaseItem,
     ReviewHistoryItem,
     SkillDownloadRecord,
@@ -67,6 +67,7 @@ from app.schemas.skill import (
     DownloadResponse,
     FavoriteResponse,
     LikeResponse,
+    PortalUploadRecordItem,
     PublicSkillCurrentVersion,
     PublicSkillDetailResponse,
     PublicSkillListItem,
@@ -94,10 +95,13 @@ from app.services.skill_access import (
 from app.services.storage import build_download_response
 from app.services.usage_guides import normalize_usage_guide
 
+"""技能域服务层（供后台与门户共用）。"""
+
 settings = get_settings()
 
 
 def _has_permission(current_user: CurrentUser, permission: str) -> bool:
+    """判断用户是否具备指定全局权限。"""
     return permission in current_user.permissions
 
 
@@ -109,6 +113,7 @@ def _can_access_skill(
     permission: str,
     allowed_scopes: set[str],
 ) -> bool:
+    """判断用户是否同时满足“全局权限 + skill scope”访问条件。"""
     return _has_permission(current_user, permission) and has_skill_scope_access(
         db,
         skill_id=skill_id,
@@ -118,6 +123,7 @@ def _can_access_skill(
 
 
 def _build_skill_capabilities(db: Session, *, skill_id: UUID, current_user: CurrentUser):
+    """构建技能详情页的能力位（结合全局权限与 skill 级授权）。"""
     can_view_details = _can_access_skill(
         db,
         skill_id=skill_id,
@@ -153,15 +159,57 @@ def _build_skill_capabilities(db: Session, *, skill_id: UUID, current_user: Curr
     }
 
 
-def _build_version_capabilities(db: Session, *, skill_id: UUID, current_user: CurrentUser, review_status: str):
-    return {
-        "edit_content": review_status in {"draft", "rejected"}
-        and _can_access_skill(
+def _can_edit_version_content(
+    db: Session,
+    *,
+    skill_id: UUID,
+    current_user: CurrentUser,
+    review_status: str,
+) -> bool:
+    """根据当前审核状态判断用户是否可编辑版本内容。"""
+    if review_status in {"draft", "rejected"}:
+        return _can_access_skill(
             db,
             skill_id=skill_id,
             current_user=current_user,
             permission="skill.version.edit",
             allowed_scopes=EDIT_SCOPES,
+        )
+    if review_status == "submitted":
+        return _can_access_skill(
+            db,
+            skill_id=skill_id,
+            current_user=current_user,
+            permission="skill.review",
+            allowed_scopes=REVIEW_SCOPES,
+        )
+    if review_status == "approved":
+        return _can_access_skill(
+            db,
+            skill_id=skill_id,
+            current_user=current_user,
+            permission="skill.publish",
+            allowed_scopes=PUBLISH_SCOPES,
+        )
+    if review_status in {"published", "archived"}:
+        return _can_access_skill(
+            db,
+            skill_id=skill_id,
+            current_user=current_user,
+            permission="skill.version.edit",
+            allowed_scopes=EDIT_SCOPES,
+        )
+    return False
+
+
+def _build_version_capabilities(db: Session, *, skill_id: UUID, current_user: CurrentUser, review_status: str):
+    """构建版本级动作能力位。"""
+    return {
+        "edit_content": _can_edit_version_content(
+            db,
+            skill_id=skill_id,
+            current_user=current_user,
+            review_status=review_status,
         ),
         "submit": review_status in {"draft", "rejected"}
         and _can_access_skill(
@@ -211,10 +259,18 @@ def _build_version_capabilities(db: Session, *, skill_id: UUID, current_user: Cu
             permission="skill.rollback",
             allowed_scopes=ROLLBACK_SCOPES,
         ),
+        "download_package": _can_access_skill(
+            db,
+            skill_id=skill_id,
+            current_user=current_user,
+            permission="skill.view",
+            allowed_scopes=VIEW_SCOPES,
+        ),
     }
 
 
 def get_public_skill_list(db: Session, params: PublicSkillListParams) -> PagedResponse[PublicSkillListItem]:
+    """返回前台技能分页列表。"""
     items, total = list_public_skills_paginated(db, params)
     return PagedResponse[PublicSkillListItem](
         items=[PublicSkillListItem.model_validate(item) for item in items],
@@ -225,6 +281,7 @@ def get_public_skill_list(db: Session, params: PublicSkillListParams) -> PagedRe
 
 
 def get_admin_skill_list(db: Session, params: AdminSkillListParams, current_user: CurrentUser) -> PagedResponse[AdminSkillListItem]:
+    """返回后台技能分页列表；非管理员按 skill 级授权过滤。"""
     if "admin" in current_user.roles:
         items, total = list_admin_skills_paginated(db, params)
     else:
@@ -245,7 +302,33 @@ def get_admin_skill_list(db: Session, params: AdminSkillListParams, current_user
     )
 
 
+def get_portal_upload_center_records(
+    db: Session,
+    *,
+    page: int,
+    page_size: int,
+    current_user: CurrentUser,
+) -> PagedResponse[PortalUploadRecordItem]:
+    """返回门户上传中心的当前用户上传记录；无上传权限时返回空列表。"""
+    if "skill.upload" not in current_user.permissions:
+        return PagedResponse[PortalUploadRecordItem](items=[], total=0, page=page, page_size=page_size)
+
+    items, total = list_portal_upload_records_paginated(
+        db,
+        user_id=str(current_user.id),
+        page=page,
+        page_size=page_size,
+    )
+    return PagedResponse[PortalUploadRecordItem](
+        items=[PortalUploadRecordItem.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 def get_public_skill_detail(db: Session, slug: str, current_user: CurrentUser | None) -> PublicSkillDetailResponse:
+    """返回前台技能详情（带缓存）；登录用户会附加收藏/点赞状态。"""
     cache_key = f"public:skill-detail:{slug}"
     cached = get_cached_json(cache_key)
     if cached is not None:
@@ -310,6 +393,7 @@ def get_public_skill_detail(db: Session, slug: str, current_user: CurrentUser | 
 
 
 def get_admin_skill_detail(db: Session, skill_id: UUID, current_user: CurrentUser) -> AdminSkillDetailResponse:
+    """返回后台技能详情（含版本摘要、审核记录与能力位）。"""
     detail = get_skill_detail_by_id(db, str(skill_id))
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在")
@@ -334,6 +418,7 @@ def get_admin_skill_detail(db: Session, skill_id: UUID, current_user: CurrentUse
 
 
 def get_admin_version_detail(db: Session, version_id: UUID, current_user: CurrentUser) -> AdminVersionDetailResponse:
+    """返回后台版本详情（含审核记录与能力位）。"""
     version = get_version_detail(db, str(version_id))
     if version is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能版本不存在")
@@ -386,6 +471,7 @@ def update_skill_display(
     description: str,
     category_slug: str,
 ) -> SkillDetailBase:
+    """更新技能展示字段并清理前台相关缓存。"""
     skill = db.execute(select(Skill).where(Skill.id == skill_id)).scalar_one_or_none()
     if skill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在")
@@ -412,12 +498,19 @@ def update_version_content(
     breaking_changes: str,
     readme_markdown: str,
     usage_guide_json: dict,
+    current_user: CurrentUser,
 ) -> AdminVersionDetail:
+    """在权限与状态允许时更新版本内容字段。"""
     version = db.execute(select(SkillVersion).where(SkillVersion.id == version_id)).scalar_one_or_none()
     if version is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能版本不存在")
-    if version.review_status not in {"draft", "rejected"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前状态不允许编辑版本文案")
+    if not _can_edit_version_content(
+        db,
+        skill_id=version.skill_id,
+        current_user=current_user,
+        review_status=version.review_status,
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前状态或权限不允许编辑版本文案")
     version.changelog = changelog
     version.install_notes = install_notes
     version.breaking_changes = breaking_changes
@@ -448,6 +541,7 @@ def update_version_content(
 
 
 def toggle_favorite(db: Session, *, skill_id: UUID, user: CurrentUser, favorited: bool) -> FavoriteResponse:
+    """新增/取消收藏，并维护 favorite_count 一致性。"""
     skill = db.execute(select(Skill).where(Skill.id == skill_id)).scalar_one_or_none()
     if skill is None or skill.current_published_version_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在或未发布")
@@ -467,6 +561,7 @@ def toggle_favorite(db: Session, *, skill_id: UUID, user: CurrentUser, favorited
 
 
 def toggle_like(db: Session, *, skill_id: UUID, user: CurrentUser, liked: bool) -> LikeResponse:
+    """新增/取消点赞，并维护 like_count 一致性。"""
     skill = db.execute(select(Skill).where(Skill.id == skill_id)).scalar_one_or_none()
     if skill is None or skill.current_published_version_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在或未发布")
@@ -492,6 +587,7 @@ def download_skill_package(
     current_user: CurrentUser | None,
     request: Request,
 ):
+    """记录下载行为并返回下载响应，同时更新下载计数。"""
     skill = db.execute(select(Skill).where(Skill.id == skill_id)).scalar_one_or_none()
     if skill is None or skill.current_published_version_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在或未发布")
@@ -518,6 +614,29 @@ def download_skill_package(
     return build_download_response(object_key=asset.object_key, original_name=asset.original_name, mime_type=asset.mime_type), response
 
 
+def download_admin_version_package(db: Session, *, version_id: UUID, current_user: CurrentUser):
+    """返回指定版本技能 ZIP 的下载响应；不计入前台 `download_count` 与 `download_logs`。
+
+    边界:
+    - 调用方已校验 `skill.view` 与 skill 级 VIEW 作用域。
+    - 写审计日志并提交事务，便于后台追溯下载行为。
+    """
+    version = db.execute(select(SkillVersion).where(SkillVersion.id == version_id)).scalar_one_or_none()
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能版本不存在")
+    asset = db.execute(select(FileAsset).where(FileAsset.id == version.package_file_id)).scalar_one()
+    write_audit_log(
+        db,
+        actor_user_id=current_user.id,
+        action="version.package.download",
+        target_type="skill_version",
+        target_id=version_id,
+        after_json={"object_key": asset.object_key, "original_name": asset.original_name},
+    )
+    db.commit()
+    return build_download_response(object_key=asset.object_key, original_name=asset.original_name, mime_type=asset.mime_type)
+
+
 def get_review_queue(
     db: Session,
     *,
@@ -525,6 +644,7 @@ def get_review_queue(
     created_by: str | None = None,
     current_user: CurrentUser,
 ) -> list[AdminReviewListItem]:
+    """返回当前用户可见的审核队列。"""
     rows = get_skill_pending_reviews(db, category=category, created_by=created_by)
     return [
         AdminReviewListItem.model_validate(
@@ -542,6 +662,7 @@ def get_review_queue(
 
 
 def get_pending_releases(db: Session, *, current_user: CurrentUser) -> list[PendingReleaseItem]:
+    """返回当前用户可见的待发布队列。"""
     rows = get_skill_pending_releases(db)
     return [
         PendingReleaseItem.model_validate(
@@ -557,6 +678,7 @@ def get_pending_releases(db: Session, *, current_user: CurrentUser) -> list[Pend
 
 
 def get_review_history_feed(db: Session, *, current_user: CurrentUser) -> list[ReviewHistoryItem]:
+    """返回当前用户在 VIEW scope 下可见的审核历史。"""
     return [
         ReviewHistoryItem.model_validate(row)
         for row in get_review_history(db)
@@ -565,6 +687,7 @@ def get_review_history_feed(db: Session, *, current_user: CurrentUser) -> list[R
 
 
 def get_skill_permissions_payload(db: Session, *, skill_id: UUID) -> list[SkillGrantItem]:
+    """返回技能授权明细（角色授权 + 用户授权）。"""
     role_grants = [SkillGrantItem.model_validate(item) for item in get_skill_role_grants(db, str(skill_id))]
     user_grants = [SkillGrantItem.model_validate(item) for item in get_skill_user_grants(db, str(skill_id))]
     return sorted([*role_grants, *user_grants], key=lambda item: (item.permission_scope, item.target_type, item.target_name))
@@ -578,6 +701,7 @@ def assign_skill_role_grants(
     permission_scope: str,
     actor_user_id: UUID,
 ) -> list[SkillGrantItem]:
+    """为技能分配角色授权，并写审计日志。"""
     for role_id in role_ids:
         exists = db.execute(
             select(SkillRoleGrant).where(
@@ -608,6 +732,7 @@ def assign_skill_user_grants(
     permission_scope: str,
     actor_user_id: UUID,
 ) -> list[SkillGrantItem]:
+    """为技能分配用户授权，并写审计日志。"""
     for user_id in user_ids:
         exists = db.execute(
             select(SkillUserGrant).where(
@@ -631,6 +756,7 @@ def assign_skill_user_grants(
 
 
 def delete_skill_role_grant(db: Session, *, skill_id: UUID, grant_id: UUID, actor_user_id: UUID) -> None:
+    """删除技能角色授权，并写审计日志。"""
     grant = db.execute(select(SkillRoleGrant).where(SkillRoleGrant.id == grant_id, SkillRoleGrant.skill_id == skill_id)).scalar_one_or_none()
     if grant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="角色授权不存在")
@@ -640,6 +766,7 @@ def delete_skill_role_grant(db: Session, *, skill_id: UUID, grant_id: UUID, acto
 
 
 def delete_skill_user_grant(db: Session, *, skill_id: UUID, grant_id: UUID, actor_user_id: UUID) -> None:
+    """删除技能用户授权，并写审计日志。"""
     grant = db.execute(select(SkillUserGrant).where(SkillUserGrant.id == grant_id, SkillUserGrant.skill_id == skill_id)).scalar_one_or_none()
     if grant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户授权不存在")
@@ -649,10 +776,12 @@ def delete_skill_user_grant(db: Session, *, skill_id: UUID, grant_id: UUID, acto
 
 
 def _build_daily_series(rows: list[dict]) -> list[SkillStatsSeriesPoint]:
+    """将按日聚合结果转换为序列点。"""
     return [SkillStatsSeriesPoint(day=str(row["day"]), count=row["count"]) for row in rows]
 
 
 def get_skill_stats(db: Session, *, skill_id: UUID) -> SkillStatsOverview:
+    """返回技能统计概览及近 30 天下载/收藏/点赞趋势。"""
     skill = db.execute(select(Skill).where(Skill.id == skill_id)).scalar_one_or_none()
     if skill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="技能不存在")
@@ -689,6 +818,7 @@ def get_skill_stats(db: Session, *, skill_id: UUID) -> SkillStatsOverview:
 
 
 def get_skill_favorite_records(db: Session, *, skill_id: UUID) -> list[SkillFavoriteRecord]:
+    """返回技能收藏明细（后台使用）。"""
     rows = db.execute(
         select(Favorite.user_id, User.username, User.display_name, Favorite.created_at)
         .join(User, User.id == Favorite.user_id)
@@ -699,6 +829,7 @@ def get_skill_favorite_records(db: Session, *, skill_id: UUID) -> list[SkillFavo
 
 
 def get_skill_download_records(db: Session, *, skill_id: UUID, current_user: CurrentUser) -> list[SkillDownloadRecord]:
+    """返回技能下载明细；非管理员脱敏敏感字段。"""
     show_sensitive = is_admin_user(current_user)
     rows = db.execute(
         select(
@@ -714,7 +845,7 @@ def get_skill_download_records(db: Session, *, skill_id: UUID, current_user: Cur
         .join(SkillVersion, SkillVersion.id == DownloadLog.skill_version_id)
         .outerjoin(User, User.id == DownloadLog.user_id)
         .where(DownloadLog.skill_id == skill_id)
-        .order_by(DownloadLog.created_at.desc())
+        .order_by(DownloadLog.created_at.desc(), DownloadLog.user_id.asc().nullsfirst(), DownloadLog.id.desc())
     ).mappings()
     payload: list[SkillDownloadRecord] = []
     for row in rows:
@@ -732,7 +863,10 @@ def get_skill_download_records(db: Session, *, skill_id: UUID, current_user: Cur
 
 
 def get_admin_users(db: Session) -> list[AdminUserListItem]:
-    users = list(db.execute(select(User).order_by(User.created_at.desc())).scalars())
+    """返回后台用户列表（含角色），供管理界面使用。"""
+    users = list(
+        db.execute(select(User).options(joinedload(User.department)).order_by(User.created_at.desc())).scalars()
+    )
     role_map: dict[UUID, list[str]] = {user.id: [] for user in users}
     rows = db.execute(
         select(UserRole.user_id, Role.code)
@@ -747,6 +881,9 @@ def get_admin_users(db: Session) -> list[AdminUserListItem]:
             username=user.username,
             display_name=user.display_name,
             email=user.email,
+            primary_department=DepartmentBrief(id=user.department.id, name=user.department.name)
+            if user.department
+            else None,
             status=user.status,
             roles=sorted(role_map.get(user.id, [])),
             last_login_at=user.last_login_at,
@@ -757,6 +894,7 @@ def get_admin_users(db: Session) -> list[AdminUserListItem]:
 
 
 def get_admin_audit_logs(db: Session, limit: int = 100) -> list[AdminAuditLogItem]:
+    """返回后台首页所需的近期审计日志。"""
     query = (
         select(
             AuditLog.id,

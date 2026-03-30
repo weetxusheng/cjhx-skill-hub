@@ -1,3 +1,5 @@
+"""FastAPI 应用入口：CORS、请求 ID、访问日志、统一异常与响应头。"""
+
 from __future__ import annotations
 
 import logging
@@ -31,6 +33,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
+    """注入 request_id、记录耗时，并写入安全相关响应头。"""
     request_id = request.headers.get(settings.request_id_header) or str(uuid4())
     set_request_id(request_id)
     request.state.request_id = request_id
@@ -58,6 +61,7 @@ async def request_context_middleware(request: Request, call_next):
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """将 HTTPException 转为统一 JSON 结构（含 request_id）。"""
     request_id = getattr(request.state, "request_id", None)
     logger.warning(
         "http_error",
@@ -76,6 +80,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """未捕获异常：记录堆栈并返回 500，不向前端泄露内部细节。"""
     request_id = getattr(request.state, "request_id", None)
     logger.exception(
         "unhandled_error",

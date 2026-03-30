@@ -1,3 +1,5 @@
+"""存储对象元数据：包、README 等文件的统一登记。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class FileAsset(Base):
+    """本地或对象存储中的文件；`sha256` 用于去重与完整性校验。"""
+
     __tablename__ = "file_assets"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

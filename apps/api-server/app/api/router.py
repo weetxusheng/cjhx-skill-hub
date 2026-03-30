@@ -1,3 +1,5 @@
+"""聚合业务 API 子路由：认证、公共、后台管理（前缀在挂载时指定）。"""
+
 from fastapi import APIRouter
 
 from app.api.routes.admin_audit_logs import router as admin_audit_logs_router

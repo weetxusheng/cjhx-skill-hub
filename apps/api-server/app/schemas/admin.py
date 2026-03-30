@@ -1,3 +1,5 @@
+"""后台治理与审计相关的 Pydantic 模型：用户、角色、审核队列、授权与统计。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -47,11 +49,19 @@ class ReviewHistoryItem(BaseModel):
     created_at: datetime
 
 
+class DepartmentBrief(BaseModel):
+    """一级部门：底层以 id 关联，name 为展示用中文名。"""
+
+    id: UUID
+    name: str
+
+
 class AdminUserListItem(BaseModel):
     id: UUID
     username: str
     display_name: str
     email: str | None
+    primary_department: DepartmentBrief | None = None
     status: str
     roles: list[str]
     last_login_at: datetime | None
@@ -62,6 +72,7 @@ class AdminUserOptionItem(BaseModel):
     id: UUID
     username: str
     display_name: str
+    primary_department: DepartmentBrief | None = None
     status: str
 
 
@@ -133,6 +144,7 @@ class SkillGrantItem(BaseModel):
     target_type: str
     target_id: UUID
     target_name: str
+    target_primary_department: DepartmentBrief | None = None
     permission_scope: str
     created_at: datetime
 

@@ -1,3 +1,5 @@
+"""技能与标签的多对多关联。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class SkillTag(Base):
+    """复合主键 (skill_id, tag_id) 表示技能打标。"""
+
     __tablename__ = "skill_tags"
 
     skill_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)

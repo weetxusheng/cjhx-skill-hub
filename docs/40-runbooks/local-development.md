@@ -76,7 +76,7 @@ cd /Users/xusheng/Documents/project/cjhx-skill-hub
 pnpm seed:local-workbench
 ```
 
-这会向本地 PostgreSQL 写入一组真实联调数据，同时生成对应的本地存储对象。当前覆盖：
+这会向本地 PostgreSQL 写入一组真实联调数据，同时生成对应的本地存储对象。默认本地对象会落到仓库根目录的 `.runtime/local-dev/storage/`，不会塞进 `apps/api-server/` 源码目录。当前覆盖：
 
 - 已发布技能
 - 待审核版本

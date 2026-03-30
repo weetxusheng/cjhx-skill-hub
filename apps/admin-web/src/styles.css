@@ -31,7 +31,7 @@ body {
 
 .login-card {
   width: min(480px, 100%);
-  border-radius: 28px;
+  border-radius: 4px;
   box-shadow: 0 24px 60px rgba(17, 33, 49, 0.12);
 }
 
@@ -71,12 +71,15 @@ body {
   gap: 16px;
   align-items: center;
   padding: 0 16px;
+  min-height: 56px;
   background: rgba(255, 255, 255, 0.82);
   border-bottom: 1px solid rgba(21, 37, 53, 0.08);
 }
 
 .admin-header-left {
   min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .admin-header-actions {
@@ -88,6 +91,16 @@ body {
 
 .admin-content {
   padding: 16px;
+}
+
+.admin-workspace-tabs {
+  padding: 8px 12px 0;
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom: 1px solid rgba(21, 37, 53, 0.08);
+}
+
+.admin-workspace-tabs .ant-tabs-nav {
+  margin: 0;
 }
 
 .page-title-row {
@@ -105,7 +118,12 @@ body {
 
 .content-card {
   margin-top: 12px;
-  border-radius: 20px;
+  border-radius: 4px;
+}
+
+/* Make all AntD cards less rounded */
+.ant-card {
+  border-radius: 4px !important;
 }
 
 .dashboard-equal-height-col {
@@ -132,6 +150,32 @@ body {
   width: 180px;
 }
 
+/* 后台列表页：筛选区第一行 + 主操作第二行 */
+.admin-list-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-list-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.admin-list-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.filters-keyword-compact {
+  width: min(360px, 100%);
+}
+
 .pagination-row {
   display: flex;
   justify-content: flex-end;
@@ -140,6 +184,83 @@ body {
 
 .detail-card {
   margin-top: 0;
+}
+
+.detail-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-layout-section .content-card {
+  margin-top: 0;
+}
+
+.detail-grid-row {
+  align-items: stretch;
+}
+
+.detail-grid-col {
+  display: flex;
+}
+
+.detail-grid-col > .content-card {
+  width: 100%;
+}
+
+.detail-card--stretch {
+  width: 100%;
+  height: 100%;
+}
+
+.detail-card--stretch .ant-card-head {
+  min-height: 56px;
+}
+
+.detail-card--stretch .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.detail-card-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-card-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+}
+
+/* 主档信息等未使用等高拉伸时，避免 margin-top:auto 产生多余占位 */
+.detail-card:not(.detail-card--stretch) .detail-card-stack .detail-card-footer {
+  margin-top: 0;
+}
+
+.detail-form-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-form-shell .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.detail-form-shell .detail-card-footer {
+  width: 100%;
+}
+
+.detail-descriptions .ant-descriptions-row > th,
+.detail-descriptions .ant-descriptions-row > td {
+  padding-bottom: 14px;
 }
 
 .code-block {
@@ -180,6 +301,10 @@ body {
     padding: 16px 16px;
   }
 
+  .admin-workspace-tabs {
+    padding: 8px 8px 0;
+  }
+
   .page-title-row {
     flex-direction: column;
     align-items: stretch;
@@ -210,4 +335,22 @@ body {
 
 .ant-modal .ant-modal-footer {
   padding: 12px 16px !important;
+}
+
+/* 版本详情页：返回所属技能主档 */
+.admin-version-detail-back {
+  margin-bottom: 16px;
+}
+
+.admin-version-detail-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1677ff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-version-detail-back a:hover {
+  color: #4096ff;
 }

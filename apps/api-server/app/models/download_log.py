@@ -1,3 +1,5 @@
+"""技能包下载明细：用于运营统计与审计追溯。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class DownloadLog(Base):
+    """单次下载事件；匿名下载时 `user_id` 可为空。"""
+
     __tablename__ = "download_logs"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

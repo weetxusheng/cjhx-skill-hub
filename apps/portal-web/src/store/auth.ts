@@ -1,6 +1,11 @@
+/**
+ * 状态约定：
+ * - 前台认证会话的唯一 Zustand 持久化入口，负责 access token、refresh token 和用户摘要恢复。
+ * - 点赞、收藏、投稿等登录态判断均以这里的会话为入口，再由 `/auth/me` 校验补强。
+ */
 import { create } from "zustand";
 
-type PortalUser = {
+export type PortalUser = {
   id: string;
   username: string;
   display_name: string;
@@ -8,6 +13,8 @@ type PortalUser = {
   status: "active" | "disabled";
   roles: string[];
   permissions: string[];
+  /** 与后端 `UserSummary` 对齐；前台可不展示 */
+  last_login_at?: string | null;
 };
 
 type PortalAuthState = {

@@ -1,22 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Spin } from "antd";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { apiRequest } from "./lib/api";
 import { AdminLayout } from "./components/AdminLayout";
-import { LoginPage } from "./pages/LoginPage";
-import { AuditLogsPage } from "./pages/AuditLogsPage";
-import { CategoriesPage } from "./pages/CategoriesPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { ReleasesPage } from "./pages/ReleasesPage";
-import { RolesPage } from "./pages/RolesPage";
-import { ReviewHistoryPage } from "./pages/ReviewHistoryPage";
-import { ReviewsPage } from "./pages/ReviewsPage";
-import { SkillDetailPage } from "./pages/SkillDetailPage";
-import { SkillsPage } from "./pages/SkillsPage";
-import { UsersPage } from "./pages/UsersPage";
-import { VersionDetailPage } from "./pages/VersionDetailPage";
+import { LoginPage } from "./pages/auth/LoginPage";
+import { AuditLogsPage } from "./pages/governance/AuditLogsPage";
+import { CategoriesPage } from "./pages/governance/CategoriesPage";
+import { DashboardPage } from "./pages/workbench/DashboardPage";
+import { ReleasesPage } from "./pages/workbench/ReleasesPage";
+import { RolesPage } from "./pages/governance/RolesPage";
+import { ReviewHistoryPage } from "./pages/workbench/ReviewHistoryPage";
+import { ReviewsPage } from "./pages/workbench/ReviewsPage";
+import { SkillDetailPage } from "./pages/detail/SkillDetailPage";
+import { SkillsPage } from "./pages/workbench/SkillsPage";
+import { UsersPage } from "./pages/governance/UsersPage";
+import { VersionDetailPage } from "./pages/detail/VersionDetailPage";
 import { hasPermission } from "./lib/permissions";
 import { useAuthStore } from "./store/auth";
 
@@ -31,8 +31,25 @@ type MeResponse = {
   last_login_at: string | null;
 };
 
+const ADMIN_LAST_PATH_STORAGE_KEY = "admin:lastPath";
+const ADMIN_TAB_STORAGE_KEY = "admin:workspaceTabs";
+
+function clearAdminUiStateStorage() {
+  window.localStorage.removeItem(ADMIN_LAST_PATH_STORAGE_KEY);
+  window.localStorage.removeItem(ADMIN_TAB_STORAGE_KEY);
+}
+
+function canAccessWorkbench(user: MeResponse) {
+  return (
+    hasPermission(user, "admin.dashboard.view")
+    || hasPermission(user, "skill.view")
+    || hasPermission(user, "skill.review")
+    || hasPermission(user, "skill.publish")
+  );
+}
+
 function firstAllowedPath(user: MeResponse) {
-  if (hasPermission(user, "admin.dashboard.view")) return "/";
+  if (canAccessWorkbench(user)) return "/";
   if (hasPermission(user, "skill.view")) return "/skills";
   if (hasPermission(user, "skill.review")) return "/reviews";
   if (hasPermission(user, "skill.publish")) return "/releases";
@@ -45,7 +62,7 @@ function firstAllowedPath(user: MeResponse) {
 }
 
 function canAccessPath(user: MeResponse, path: string) {
-  if (path === "/") return hasPermission(user, "admin.dashboard.view");
+  if (path === "/") return canAccessWorkbench(user);
   if (path === "/skills" || path.startsWith("/skills/") || path.startsWith("/versions/")) return hasPermission(user, "skill.view");
   if (path.startsWith("/reviews")) return hasPermission(user, "skill.review");
   if (path.startsWith("/releases")) return hasPermission(user, "skill.publish");
@@ -59,7 +76,9 @@ function canAccessPath(user: MeResponse, path: string) {
 
 function ProtectedApp() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { accessToken, setSession, refreshToken, clearSession } = useAuthStore();
+  const hasRestoredLastPathRef = useRef(false);
 
   const meQuery = useQuery({
     queryKey: ["me", accessToken],
@@ -75,9 +94,37 @@ function ProtectedApp() {
 
   useEffect(() => {
     if (meQuery.isError) {
+      clearAdminUiStateStorage();
       clearSession();
     }
   }, [clearSession, meQuery.isError]);
+
+  // Persist last visited admin route (for refresh / re-login)
+  // Must be declared before any early return to keep hooks order stable.
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+    if (!meQuery.data) {
+      return;
+    }
+    const pathWithSearch = `${location.pathname}${location.search ?? ""}`;
+    if (pathWithSearch && pathWithSearch !== "/login") {
+      window.localStorage.setItem(ADMIN_LAST_PATH_STORAGE_KEY, pathWithSearch);
+    }
+  }, [accessToken, meQuery.data, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!meQuery.data || location.pathname !== "/" || hasRestoredLastPathRef.current) {
+      return;
+    }
+
+    hasRestoredLastPathRef.current = true;
+    const savedPath = window.localStorage.getItem(ADMIN_LAST_PATH_STORAGE_KEY);
+    if (savedPath && savedPath !== "/" && canAccessPath(meQuery.data, savedPath)) {
+      navigate(savedPath, { replace: true });
+    }
+  }, [location.pathname, meQuery.data, navigate]);
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -91,6 +138,7 @@ function ProtectedApp() {
       });
     },
     onSettled: () => {
+      clearAdminUiStateStorage();
       clearSession();
     },
   });
@@ -120,6 +168,13 @@ function ProtectedApp() {
   );
 }
 
+/**
+ * 交互约定：
+ * - 加载态：会话校验期间展示全屏 Spin，不提前渲染后台骨架。
+ * - 错误态：`/auth/me` 失败时清理本地会话并回到登录页。
+ * - 权限不足态：根据用户 capability 自动导航到首个允许页面，禁止空白后台。
+ * - 上下文恢复：登录后优先恢复最近一次后台访问路径，恢复失败再回默认工作台。
+ */
 export default function App() {
   return (
     <Routes>

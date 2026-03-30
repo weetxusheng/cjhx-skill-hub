@@ -1,7 +1,7 @@
 # Backend Prompt Guide
 
 ## 先读什么
-1. `docs/20-engineering/backend-guide.md`
+1. `docs/20-engineering/engineering-handbook.md`
 2. `docs/10-architecture/data-and-permissions.md`
 3. `docs/30-product-flows/upload-review-release.md`
 

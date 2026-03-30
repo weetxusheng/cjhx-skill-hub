@@ -7,11 +7,13 @@ from app.core.config import get_settings
 
 
 def _download_url(skill_id: UUID) -> str:
+    """根据技能 ID 生成标准下载接口 URL。"""
     settings = get_settings()
     return f"{settings.app_base_url.rstrip('/')}{settings.api_prefix}/public/skills/{skill_id}/download"
 
 
 def _normalize_text(value: Any) -> str:
+    """将输入归一化为去首尾空白字符串；非字符串返回空串。"""
     return value.strip() if isinstance(value, str) else ""
 
 
@@ -24,6 +26,12 @@ def build_default_usage_guide(
     description: str,
     install_notes: str,
 ) -> dict:
+    """构建默认 usage guide（agent 与 human 双视图）。
+
+    说明:
+    - 当版本未提供使用指引时，前后端都回退到此默认结构。
+    - `human` 侧命令默认基于 curl + unzip，便于快速上手。
+    """
     download_url = _download_url(skill_id)
     install_hint = install_notes.strip() or "请先下载 ZIP 包，解压后阅读 README.md 再继续使用。"
     skill_intro = summary.strip() or description.strip() or f"请帮我使用 {skill_name}。"
@@ -64,6 +72,12 @@ def normalize_usage_guide(
     description: str,
     install_notes: str,
 ) -> dict:
+    """归一化版本内 usage guide，并对缺失字段回退默认值。
+
+    规则:
+    - 非法结构（非 dict）按空结构处理。
+    - 每个字段都执行文本归一化；空值回退到默认模板。
+    """
     fallback = build_default_usage_guide(
         skill_id=skill_id,
         skill_name=skill_name,

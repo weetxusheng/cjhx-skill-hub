@@ -7,13 +7,13 @@ from io import StringIO
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, delete, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, delete, exists, func, or_, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.audit_log import AuditLog
 from app.models.category import Category
+from app.models.department import Department
 from app.models.permission import Permission
-from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.role_permission import RolePermission
 from app.models.skill import Skill
@@ -28,6 +28,7 @@ from app.schemas.admin import (
     AdminUserListItem,
     AdminUserOptionItem,
     AdminUserSkillGrantItem,
+    DepartmentBrief,
     PermissionItem,
 )
 from app.schemas.category import CategoryItem, CategoryUpsertRequest
@@ -36,10 +37,13 @@ from app.services.audit import write_audit_log
 from app.services.auth import revoke_all_user_refresh_tokens
 from app.services.cache import delete_cached_json
 
+"""治理域服务：分类、角色、权限与后台用户管理。"""
+
 PROTECTED_SYSTEM_ROLE_CODES = {"admin"}
 
 
 def list_admin_categories(db: Session) -> list[CategoryItem]:
+    """返回后台分类列表（含技能数量）。"""
     query = (
         select(
             Category.id,
@@ -68,6 +72,7 @@ def list_admin_categories(db: Session) -> list[CategoryItem]:
 
 
 def create_category(db: Session, *, payload: CategoryUpsertRequest, actor_user_id: UUID) -> CategoryItem:
+    """创建分类，并写审计日志与清理前台分类缓存。"""
     exists = db.execute(select(Category).where(or_(Category.slug == payload.slug, Category.name == payload.name))).scalar_one_or_none()
     if exists is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="分类名称或 slug 已存在")
@@ -103,6 +108,7 @@ def update_category(
     payload: CategoryUpsertRequest,
     actor_user_id: UUID,
 ) -> CategoryItem:
+    """更新分类，记录 before/after 审计并清理缓存。"""
     category = db.execute(select(Category).where(Category.id == category_id)).scalar_one_or_none()
     if category is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
@@ -150,6 +156,7 @@ def update_category(
 
 
 def delete_category(db: Session, *, category_id: UUID, actor_user_id: UUID) -> None:
+    """删除分类（仅在无关联技能时允许），并记录审计与清理缓存。"""
     category = db.execute(select(Category).where(Category.id == category_id)).scalar_one_or_none()
     if category is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
@@ -178,16 +185,21 @@ def delete_category(db: Session, *, category_id: UUID, actor_user_id: UUID) -> N
 
 
 def _build_user_query(*, q: str | None = None, status_filter: str | None = None):
-    query = select(User).order_by(User.created_at.desc())
+    """构造用户列表基础查询（支持关键字与状态筛选）。"""
+    query = select(User).options(joinedload(User.department)).order_by(User.created_at.desc())
     if q:
         term = f"%{q.strip()}%"
-        query = query.where(or_(User.username.ilike(term), User.display_name.ilike(term), User.email.ilike(term)))
+        dept_match = exists().where(and_(Department.id == User.primary_department_id, Department.name.ilike(term)))
+        query = query.where(
+            or_(User.username.ilike(term), User.display_name.ilike(term), User.email.ilike(term), dept_match)
+        )
     if status_filter:
         query = query.where(User.status == status_filter)
     return query
 
 
 def _build_user_items(db: Session, users: list[User]) -> list[AdminUserListItem]:
+    """将用户与其角色聚合为后台列表项。"""
     if not users:
         return []
     user_ids = [user.id for user in users]
@@ -205,6 +217,9 @@ def _build_user_items(db: Session, users: list[User]) -> list[AdminUserListItem]
             username=user.username,
             display_name=user.display_name,
             email=user.email,
+            primary_department=DepartmentBrief(id=user.department.id, name=user.department.name)
+            if user.department
+            else None,
             status=user.status,
             roles=sorted(role_map.get(user.id, [])),
             last_login_at=user.last_login_at,
@@ -215,6 +230,7 @@ def _build_user_items(db: Session, users: list[User]) -> list[AdminUserListItem]
 
 
 def list_admin_users(db: Session, *, q: str | None = None, status_filter: str | None = None) -> list[AdminUserListItem]:
+    """返回后台用户列表（支持筛选）。"""
     users = list(db.execute(_build_user_query(q=q, status_filter=status_filter)).scalars())
     return _build_user_items(db, users)
 
@@ -227,6 +243,7 @@ def list_admin_users_paginated(
     page: int = 1,
     page_size: int = 20,
 ) -> PagedResponse[AdminUserListItem]:
+    """返回后台用户分页列表。"""
     base_query = _build_user_query(q=q, status_filter=status_filter)
     total = db.execute(select(func.count()).select_from(base_query.order_by(None).subquery())).scalar_one()
     users = list(db.execute(base_query.offset((page - 1) * page_size).limit(page_size)).scalars())
@@ -239,14 +256,24 @@ def list_admin_users_paginated(
 
 
 def list_admin_user_options(db: Session, *, q: str | None = None, status_filter: str | None = None) -> list[AdminUserOptionItem]:
+    """返回轻量用户选项（下拉/自动补全）。"""
     users = list(db.execute(_build_user_query(q=q, status_filter=status_filter)).scalars())
     return [
-        AdminUserOptionItem(id=user.id, username=user.username, display_name=user.display_name, status=user.status)
+        AdminUserOptionItem(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            primary_department=DepartmentBrief(id=user.department.id, name=user.department.name)
+            if user.department
+            else None,
+            status=user.status,
+        )
         for user in users
     ]
 
 
 def list_user_skill_grants(db: Session, *, user_id: UUID) -> list[AdminUserSkillGrantItem]:
+    """按技能维度返回用户有效授权（直授 + 继承）。"""
     user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
@@ -312,7 +339,7 @@ def list_user_skill_grants(db: Session, *, user_id: UUID) -> list[AdminUserSkill
             },
         )
         item["inherited_scopes"].add(row["permission_scope"])
-        item["inherited_roles"].add(f"{row['role_name']} ({row['role_code']})")
+        item["inherited_roles"].add(row["role_name"])
 
     items: list[AdminUserSkillGrantItem] = []
     for item in aggregated.values():
@@ -334,6 +361,7 @@ def list_user_skill_grants(db: Session, *, user_id: UUID) -> list[AdminUserSkill
 
 
 def assign_user_roles(db: Session, *, user_id: UUID, roles: Iterable[str], actor_user_id: UUID) -> AdminUserListItem:
+    """替换用户角色分配，并记录审计。"""
     role_codes = sorted(set(roles))
     if not role_codes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="角色列表非法")
@@ -363,15 +391,18 @@ def assign_user_roles(db: Session, *, user_id: UUID, roles: Iterable[str], actor
 
 
 def list_permissions(db: Session) -> list[PermissionItem]:
+    """按分组与编码排序返回权限点列表。"""
     rows = db.execute(select(Permission).order_by(Permission.group_key.asc(), Permission.code.asc())).scalars()
     return [PermissionItem(code=item.code, name=item.name, description=item.description, group_key=item.group_key) for item in rows]
 
 
 def _build_role_query():
+    """构造角色列表基础查询（系统角色优先）。"""
     return select(Role).order_by(Role.is_system.desc(), Role.created_at.asc())
 
 
 def _build_role_items(db: Session, roles: list[Role]) -> list[AdminRoleItem]:
+    """将角色与权限编码聚合为后台列表项。"""
     if not roles:
         return []
     role_ids = [role.id for role in roles]
@@ -399,14 +430,31 @@ def _build_role_items(db: Session, roles: list[Role]) -> list[AdminRoleItem]:
 
 
 def list_roles(db: Session) -> list[AdminRoleItem]:
+    """返回治理页面角色列表。"""
     roles = list(db.execute(_build_role_query()).scalars())
     return _build_role_items(db, roles)
 
 
-def list_roles_paginated(db: Session, *, page: int = 1, page_size: int = 20) -> PagedResponse[AdminRoleItem]:
-    base_query = _build_role_query()
-    total = db.execute(select(func.count()).select_from(base_query.order_by(None).subquery())).scalar_one()
-    roles = list(db.execute(base_query.offset((page - 1) * page_size).limit(page_size)).scalars())
+def list_roles_paginated(
+    db: Session,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    q: str | None = None,
+    is_active: bool | None = None,
+) -> PagedResponse[AdminRoleItem]:
+    """返回治理页面角色分页列表；支持按 code/name/description 关键字与启用状态筛选。"""
+    stmt = select(Role)
+    if q:
+        term = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(Role.code.ilike(term), Role.name.ilike(term), Role.description.ilike(term)),
+        )
+    if is_active is not None:
+        stmt = stmt.where(Role.is_active.is_(is_active))
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    ordered = stmt.order_by(Role.is_system.desc(), Role.created_at.asc())
+    roles = list(db.execute(ordered.offset((page - 1) * page_size).limit(page_size)).scalars())
     return PagedResponse[AdminRoleItem](
         items=_build_role_items(db, roles),
         total=total,
@@ -416,6 +464,7 @@ def list_roles_paginated(db: Session, *, page: int = 1, page_size: int = 20) -> 
 
 
 def list_role_options(db: Session) -> list[AdminRoleOptionItem]:
+    """返回轻量角色选项（下拉/自动补全）。"""
     roles = list(db.execute(_build_role_query()).scalars())
     return [
         AdminRoleOptionItem(id=role.id, code=role.code, name=role.name, is_active=role.is_active)
@@ -424,6 +473,7 @@ def list_role_options(db: Session) -> list[AdminRoleOptionItem]:
 
 
 def create_role(db: Session, *, code: str, name: str, description: str | None, actor_user_id: UUID) -> AdminRoleItem:
+    """创建非系统角色，并记录审计。"""
     normalized_code = code.strip()
     if not normalized_code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="角色 code 不能为空")
@@ -454,6 +504,7 @@ def update_role(
     description: str | None,
     actor_user_id: UUID,
 ) -> AdminRoleItem:
+    """更新角色基础字段；系统角色不允许改 code。"""
     role = db.execute(select(Role).where(Role.id == role_id)).scalar_one_or_none()
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="角色不存在")
@@ -482,6 +533,7 @@ def update_role(
 
 
 def set_role_permissions(db: Session, *, role_id: UUID, permission_codes: Iterable[str], actor_user_id: UUID) -> AdminRoleItem:
+    """替换角色权限集合，并记录审计。"""
     codes = sorted(set(permission_codes))
     if not codes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="权限列表不能为空")
@@ -508,6 +560,7 @@ def set_role_permissions(db: Session, *, role_id: UUID, permission_codes: Iterab
 
 
 def set_role_status(db: Session, *, role_id: UUID, enabled: bool, actor_user_id: UUID) -> AdminRoleItem:
+    """启用/禁用角色；受保护的系统管理员角色不可禁用。"""
     role = db.execute(select(Role).where(Role.id == role_id)).scalar_one_or_none()
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="角色不存在")
@@ -530,6 +583,7 @@ def set_role_status(db: Session, *, role_id: UUID, enabled: bool, actor_user_id:
 
 
 def set_user_status(db: Session, *, user_id: UUID, enabled: bool, actor_user_id: UUID) -> AdminUserListItem:
+    """启用/禁用用户；禁用时回收 refresh token 并记录审计。"""
     user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
@@ -562,6 +616,7 @@ def list_audit_logs(
     date_to: datetime | None = None,
     limit: int | None = None,
 ):
+    """构造审计日志查询（用于列表与导出）。"""
     query = (
         select(
             AuditLog.id,
@@ -608,6 +663,7 @@ def list_audit_logs_paginated(
     page: int = 1,
     page_size: int = 50,
 ) -> PagedResponse[AdminAuditLogItem]:
+    """返回治理页面审计日志分页列表。"""
     base_query = list_audit_logs(
         db,
         actor_query=actor_query,
@@ -636,6 +692,7 @@ def list_audit_logs_for_export(
     date_to: datetime | None = None,
     limit: int = 500,
 ) -> list[AdminAuditLogItem]:
+    """返回用于导出的审计日志（含默认上限，避免超大结果集）。"""
     query = list_audit_logs(
         db,
         actor_query=actor_query,
@@ -649,6 +706,7 @@ def list_audit_logs_for_export(
 
 
 def export_audit_logs_csv(items: list[AdminAuditLogItem]) -> str:
+    """将审计日志导出为 CSV（内存构建）。"""
     buffer = StringIO()
     writer = DictWriter(
         buffer,

@@ -1,5 +1,8 @@
+"""SQLAlchemy ORM 模型聚合导出，供迁移与仓储层统一引用。"""
+
 from app.models.audit_log import AuditLog
 from app.models.category import Category
+from app.models.department import Department
 from app.models.download_log import DownloadLog
 from app.models.file_asset import FileAsset
 from app.models.favorite import Favorite
@@ -21,6 +24,7 @@ from app.models.version_review import VersionReview
 __all__ = [
     "AuditLog",
     "Category",
+    "Department",
     "DownloadLog",
     "FileAsset",
     "Favorite",

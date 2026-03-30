@@ -1,3 +1,5 @@
+"""用户与技能点赞关系。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class SkillLike(Base):
+    """复合主键 (user_id, skill_id) 表示一条点赞。"""
+
     __tablename__ = "skill_likes"
 
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)

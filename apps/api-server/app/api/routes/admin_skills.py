@@ -1,3 +1,5 @@
+"""后台技能：列表、上传、详情与展示信息、统计、授权矩阵与运营明细。"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -43,6 +45,7 @@ def list_admin_skills(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.view")),
 ) -> dict:
+    """分页列出后台可见技能，受全局权限与 skill 级作用域过滤。"""
     payload = get_admin_skill_list(
         db,
         AdminSkillListParams(category=category, q=q, status=status, page=page, page_size=page_size),
@@ -58,6 +61,7 @@ async def upload_skill(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.upload")),
 ) -> dict:
+    """上传 zip 包并创建/关联版本（默认直接进入待审核）；受 per-user+IP 上传限流。"""
     enforce_rate_limit(
         scope="admin-upload",
         actor_key=f"{current_user.id}:{request.client.host if request and request.client else 'unknown'}",
@@ -76,6 +80,7 @@ def get_skill_detail(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.view")),
 ) -> dict:
+    """技能详情（后台视图，含版本与授权等），需 skill 级 view。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=VIEW_SCOPES)
     payload = get_admin_skill_detail(db, skill_id, current_user)
     return success_response(payload.model_dump(mode="json"))
@@ -88,6 +93,7 @@ def patch_skill(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.edit")),
 ) -> dict:
+    """更新名称、摘要、描述、分类等展示字段；需 skill 级 edit。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=EDIT_SCOPES)
     payload = update_skill_display(
         db,
@@ -106,6 +112,7 @@ def get_skill_stats_view(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.view")),
 ) -> dict:
+    """技能运营统计（下载、收藏等聚合口径）。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=VIEW_SCOPES)
     payload = get_skill_stats(db, skill_id=skill_id)
     return success_response(payload.model_dump(mode="json"))
@@ -117,6 +124,7 @@ def get_skill_favorites_view(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("admin.users.view")),
 ) -> dict:
+    """收藏用户明细列表；需用户治理权限与 skill 级 view。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=VIEW_SCOPES)
     payload = get_skill_favorite_records(db, skill_id=skill_id)
     return success_response([item.model_dump(mode="json") for item in payload])
@@ -128,6 +136,7 @@ def get_skill_downloads_view(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("admin.users.view")),
 ) -> dict:
+    """下载记录明细（含脱敏/权限控制）；需用户治理权限与 skill 级 view。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=VIEW_SCOPES)
     payload = get_skill_download_records(db, skill_id=skill_id, current_user=current_user)
     return success_response([item.model_dump(mode="json") for item in payload])
@@ -139,6 +148,7 @@ def get_skill_permissions_view(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.view")),
 ) -> dict:
+    """当前用户可见的 skill 级授权矩阵（用户/角色授予）。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=VIEW_SCOPES)
     payload = get_skill_permissions_payload(db, skill_id=skill_id)
     return success_response([item.model_dump(mode="json") for item in payload])
@@ -151,6 +161,7 @@ def post_skill_role_grants(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.edit")),
 ) -> dict:
+    """批量设置角色授权；需 skill 级 owner 范围。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=OWNER_SCOPES)
     payload = assign_skill_role_grants(
         db,
@@ -169,6 +180,7 @@ def post_skill_user_grants(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.edit")),
 ) -> dict:
+    """批量设置用户直接授权；需 skill 级 owner 范围。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=OWNER_SCOPES)
     payload = assign_skill_user_grants(
         db,
@@ -187,6 +199,7 @@ def remove_skill_role_grant(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.edit")),
 ) -> dict:
+    """删除指定角色授权记录。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=OWNER_SCOPES)
     delete_skill_role_grant(db, skill_id=skill_id, grant_id=grant_id, actor_user_id=current_user.id)
     return success_response({"deleted": True})
@@ -199,6 +212,7 @@ def remove_skill_user_grant(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permissions("skill.edit")),
 ) -> dict:
+    """删除指定用户直接授权记录。"""
     ensure_skill_scopes(db, skill_id=skill_id, current_user=current_user, allowed_scopes=OWNER_SCOPES)
     delete_skill_user_grant(db, skill_id=skill_id, grant_id=grant_id, actor_user_id=current_user.id)
     return success_response({"deleted": True})

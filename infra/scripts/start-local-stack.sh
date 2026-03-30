@@ -10,6 +10,16 @@ LOG_DIR="${RUNTIME_DIR}/logs"
 
 mkdir -p "${PID_DIR}" "${LOG_DIR}"
 
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${ROOT_DIR}/.env"
+  set +a
+fi
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/dev-stack-env.sh"
+
 ensure_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Error: required command '$1' not found." >&2
@@ -39,6 +49,8 @@ is_port_busy() {
   return 1
 }
 
+API_CMD="cd apps/api-server && .venv/bin/uvicorn app.main:app --reload --host ${DEV_HOST} --port ${API_PORT}"
+
 start_process() {
   local name="$1"
   local port="$2"
@@ -66,7 +78,7 @@ start_process() {
     exit 1
   fi
 
-  nohup bash -lc "cd '${ROOT_DIR}' && ${command}" </dev/null >"${log_file}" 2>&1 &
+  nohup bash -lc "cd '${ROOT_DIR}' && set -a && [[ -f .env ]] && source .env && set +a && ${command}" </dev/null >"${log_file}" 2>&1 &
   local pid=$!
   echo "${pid}" >"${pid_file}"
 
@@ -92,19 +104,20 @@ bash "${ROOT_DIR}/infra/scripts/local-infra.sh" up
 echo "Running database migrations..."
 (cd "${ROOT_DIR}/apps/api-server" && .venv/bin/alembic upgrade head)
 
-start_process "api" "8000" "http://127.0.0.1:8000/health/live" \
-  "cd apps/api-server && .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
-start_process "admin-web" "5174" "http://127.0.0.1:5174" \
-  "pnpm --filter admin-web dev -- --host 127.0.0.1 --port 5174"
-start_process "portal-web" "5173" "http://127.0.0.1:5173" \
-  "pnpm --filter portal-web dev -- --host 127.0.0.1 --port 5173"
+start_process "api" "${API_PORT}" "${API_HEALTH_URL}" "${API_CMD}"
+
+ADMIN_CMD="pnpm --filter admin-web dev -- --host ${DEV_HOST} --port ${ADMIN_DEV_PORT}"
+PORTAL_CMD="pnpm --filter portal-web dev -- --host ${DEV_HOST} --port ${PORTAL_DEV_PORT}"
+
+start_process "admin-web" "${ADMIN_DEV_PORT}" "${ADMIN_DEV_BASE}" "${ADMIN_CMD}"
+start_process "portal-web" "${PORTAL_DEV_PORT}" "${PORTAL_DEV_BASE}" "${PORTAL_CMD}"
 
 cat <<EOF
 
 Local stack is ready:
-- API: http://127.0.0.1:8000
-- Admin: http://127.0.0.1:5174
-- Portal: http://127.0.0.1:5173
+- API: ${API_DEV_BASE}
+- Admin: ${ADMIN_DEV_BASE}
+- Portal: ${PORTAL_DEV_BASE}
 
 Runtime files:
 - PID dir: ${PID_DIR}

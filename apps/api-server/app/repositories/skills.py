@@ -7,8 +7,8 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
+from app.models.department import Department
 from app.models.favorite import Favorite
-from app.models.download_log import DownloadLog
 from app.models.role import Role
 from app.models.skill import Skill
 from app.models.skill_like import SkillLike
@@ -16,10 +16,15 @@ from app.models.skill_role_grant import SkillRoleGrant
 from app.models.skill_user_grant import SkillUserGrant
 from app.models.skill_version import SkillVersion
 from app.models.user import User
-from app.models.user_role import UserRole
 from app.models.version_review import VersionReview
 
 PublicSkillSort = Literal["latest", "downloads", "favorites", "name"]
+
+"""技能查询仓储层。
+
+约束：
+- 仓储层仅负责数据读写与结果整形，不承载权限或状态机判断。
+"""
 
 
 @dataclass(slots=True)
@@ -41,6 +46,7 @@ class AdminSkillListParams:
 
 
 def _apply_shared_filters(query: Select, *, category: str | None, q: str | None) -> Select:
+    """为前台与后台技能列表应用共享筛选条件（分类 + 关键词）。"""
     if category:
         query = query.where(Category.slug == category)
 
@@ -60,11 +66,13 @@ def _apply_shared_filters(query: Select, *, category: str | None, q: str | None)
 
 
 def _count_rows(db: Session, query: Select) -> int:
+    """统计查询总行数，并移除排序以保证正确性与性能。"""
     count_query = select(func.count()).select_from(query.order_by(None).subquery())
     return db.execute(count_query).scalar_one()
 
 
 def list_public_skills_paginated(db: Session, params: PublicSkillListParams) -> tuple[list[dict], int]:
+    """返回前台技能列表（支持筛选与排序），并返回总数。"""
     query = (
         select(
             Skill.id,
@@ -121,15 +129,69 @@ def list_public_skills_paginated(db: Session, params: PublicSkillListParams) -> 
 
 
 def list_admin_skills_paginated(db: Session, params: AdminSkillListParams) -> tuple[list[dict], int]:
+    """返回后台技能分页列表与总数。"""
     return _list_admin_skills(db, params, paginate=True)
 
 
 def list_admin_skills_all(db: Session, params: AdminSkillListParams) -> list[dict]:
+    """返回后台技能全量列表（供 service 层二次过滤）。"""
     items, _ = _list_admin_skills(db, params, paginate=False)
     return items
 
 
+def list_portal_upload_records_paginated(
+    db: Session,
+    *,
+    user_id: str,
+    page: int,
+    page_size: int,
+) -> tuple[list[dict], int]:
+    """返回门户上传中心的当前用户上传记录。"""
+    query = (
+        select(
+            SkillVersion.id.label("version_id"),
+            Skill.id.label("skill_id"),
+            Skill.name.label("skill_name"),
+            Skill.slug.label("skill_slug"),
+            Category.name.label("category_name"),
+            Category.slug.label("category_slug"),
+            SkillVersion.version,
+            SkillVersion.review_status,
+            SkillVersion.review_comment,
+            SkillVersion.published_at,
+            SkillVersion.created_at,
+            SkillVersion.updated_at,
+        )
+        .join(Skill, Skill.id == SkillVersion.skill_id)
+        .join(Category, Category.id == Skill.category_id)
+        .where(SkillVersion.created_by == user_id)
+        .order_by(SkillVersion.updated_at.desc(), SkillVersion.created_at.desc())
+    )
+    total = _count_rows(db, query)
+    offset = (page - 1) * page_size
+    rows = db.execute(query.offset(offset).limit(page_size)).all()
+    items = [
+        {
+            "version_id": row.version_id,
+            "skill_id": row.skill_id,
+            "skill_name": row.skill_name,
+            "skill_slug": row.skill_slug,
+            "category_name": row.category_name,
+            "category_slug": row.category_slug,
+            "version": row.version,
+            "review_status": row.review_status,
+            "review_comment": row.review_comment,
+            "published_at": row.published_at,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
+        for row in rows
+    ]
+    return items, total
+
+
 def _list_admin_skills(db: Session, params: AdminSkillListParams, *, paginate: bool) -> tuple[list[dict], int]:
+    """后台技能列表内部查询构造器（分页与非分页共用）。"""
     latest_version_status_sq = (
         select(SkillVersion.review_status)
         .where(SkillVersion.skill_id == Skill.id)
@@ -220,6 +282,7 @@ def _list_admin_skills(db: Session, params: AdminSkillListParams, *, paginate: b
 
 
 def get_skill_detail_by_slug(db: Session, slug: str) -> dict | None:
+    """按 slug 获取技能详情（仅数据层）。"""
     row = db.execute(
         select(
             Skill.id,
@@ -248,6 +311,7 @@ def get_skill_detail_by_slug(db: Session, slug: str) -> dict | None:
 
 
 def get_skill_detail_by_id(db: Session, skill_id: str) -> dict | None:
+    """按 id 获取技能详情（仅数据层）。"""
     row = db.execute(
         select(
             Skill.id,
@@ -276,6 +340,7 @@ def get_skill_detail_by_id(db: Session, skill_id: str) -> dict | None:
 
 
 def get_version_summaries_for_skill(db: Session, skill_id: str, *, only_published: bool = False) -> list[dict]:
+    """返回技能版本摘要；可选仅返回已发布版本。"""
     query = select(
         SkillVersion.id,
         SkillVersion.version,
@@ -290,6 +355,7 @@ def get_version_summaries_for_skill(db: Session, skill_id: str, *, only_publishe
 
 
 def get_version_detail(db: Session, version_id: str) -> dict | None:
+    """按版本 id 返回完整详情（含 markdown 与 usage_guide_json）。"""
     row = db.execute(
         select(
             SkillVersion.id,
@@ -317,6 +383,7 @@ def get_version_detail(db: Session, version_id: str) -> dict | None:
 
 
 def get_review_records_for_skill(db: Session, skill_id: str) -> list[dict]:
+    """返回技能所有版本的审核记录（倒序）。"""
     query = (
         select(
             VersionReview.id,
@@ -335,6 +402,7 @@ def get_review_records_for_skill(db: Session, skill_id: str) -> list[dict]:
 
 
 def get_review_records_for_version(db: Session, version_id: str) -> list[dict]:
+    """返回单个版本的审核记录（倒序）。"""
     query = (
         select(
             VersionReview.id,
@@ -352,6 +420,7 @@ def get_review_records_for_version(db: Session, version_id: str) -> list[dict]:
 
 
 def get_skill_role_grants(db: Session, skill_id: str) -> list[dict]:
+    """返回技能的角色授权列表（标准化结构）。"""
     query = (
         select(
             SkillRoleGrant.id,
@@ -364,26 +433,41 @@ def get_skill_role_grants(db: Session, skill_id: str) -> list[dict]:
         .where(SkillRoleGrant.skill_id == skill_id)
         .order_by(SkillRoleGrant.created_at.asc())
     )
-    return [{**dict(row), "target_type": "role"} for row in db.execute(query).mappings()]
+    return [
+        {**dict(row), "target_type": "role", "target_primary_department": None}
+        for row in db.execute(query).mappings()
+    ]
 
 
 def get_skill_user_grants(db: Session, skill_id: str) -> list[dict]:
+    """返回技能的用户授权列表（标准化结构）。"""
     query = (
         select(
             SkillUserGrant.id,
             SkillUserGrant.user_id.label("target_id"),
             User.display_name.label("target_name"),
+            Department.id.label("dept_id"),
+            Department.name.label("dept_name"),
             SkillUserGrant.permission_scope,
             SkillUserGrant.created_at,
         )
         .join(User, User.id == SkillUserGrant.user_id)
+        .outerjoin(Department, Department.id == User.primary_department_id)
         .where(SkillUserGrant.skill_id == skill_id)
         .order_by(SkillUserGrant.created_at.asc())
     )
-    return [{**dict(row), "target_type": "user"} for row in db.execute(query).mappings()]
+    rows: list[dict] = []
+    for row in db.execute(query).mappings():
+        data = dict(row)
+        dept_id = data.pop("dept_id", None)
+        dept_name = data.pop("dept_name", None)
+        tpd = {"id": dept_id, "name": dept_name} if dept_id else None
+        rows.append({**data, "target_type": "user", "target_primary_department": tpd})
+    return rows
 
 
 def get_skill_pending_reviews(db: Session, *, category: str | None = None, created_by: str | None = None) -> list[dict]:
+    """返回待审核队列（review_status=submitted）。"""
     latest_comment_sq = (
         select(VersionReview.comment)
         .where(VersionReview.skill_version_id == SkillVersion.id)
@@ -426,6 +510,7 @@ def get_skill_pending_reviews(db: Session, *, category: str | None = None, creat
 
 
 def get_skill_pending_releases(db: Session) -> list[dict]:
+    """返回待发布队列（review_status=approved）。"""
     latest_comment_sq = (
         select(VersionReview.comment)
         .where(VersionReview.skill_version_id == SkillVersion.id, VersionReview.action == "approve")
@@ -462,6 +547,7 @@ def get_skill_pending_releases(db: Session) -> list[dict]:
 
 
 def get_review_history(db: Session) -> list[dict]:
+    """返回关键流程动作的审核历史（倒序）。"""
     query = (
         select(
             SkillVersion.id.label("version_id"),
@@ -485,6 +571,7 @@ def get_review_history(db: Session) -> list[dict]:
 
 
 def get_scope_assignees(db: Session, *, skill_id: str, scope: str, target_type: str) -> list[str]:
+    """返回指定 skill scope 下已分配用户/角色的展示名。"""
     if target_type == "user":
         query = (
             select(User.display_name)
@@ -503,6 +590,7 @@ def get_scope_assignees(db: Session, *, skill_id: str, scope: str, target_type: 
 
 
 def is_skill_favorited(db: Session, user_id: str, skill_id: str) -> bool:
+    """判断用户是否已收藏该技能。"""
     return (
         db.execute(
             select(Favorite.user_id).where(Favorite.user_id == user_id, Favorite.skill_id == skill_id)
@@ -512,6 +600,7 @@ def is_skill_favorited(db: Session, user_id: str, skill_id: str) -> bool:
 
 
 def is_skill_liked(db: Session, user_id: str, skill_id: str) -> bool:
+    """判断用户是否已点赞该技能。"""
     return (
         db.execute(
             select(SkillLike.user_id).where(SkillLike.user_id == user_id, SkillLike.skill_id == skill_id)

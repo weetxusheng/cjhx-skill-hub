@@ -23,6 +23,7 @@ venv/
 
 # Logs
 *.log
+*.eslintcache
 
 # Build / temp
 tmp/
@@ -38,3 +39,4 @@ apps/*/vite.config.d.ts
 # Alembic / local DB artifacts
 *.sqlite
 *.sqlite3
+apps/api-server/storage/tests/generated/

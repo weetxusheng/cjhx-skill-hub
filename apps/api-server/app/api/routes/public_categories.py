@@ -1,3 +1,5 @@
+"""门户公开分类列表（带缓存与可见技能数）。"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -17,6 +19,7 @@ settings = get_settings()
 
 @router.get("/categories")
 def list_public_categories(db: Session = Depends(get_db)) -> dict:
+    """返回可见分类及每类已发布技能数量；命中 Redis 缓存则直接返回。"""
     cache_key = "public:categories"
     cached = get_cached_json(cache_key)
     if cached is not None:

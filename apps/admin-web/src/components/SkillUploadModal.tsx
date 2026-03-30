@@ -1,6 +1,11 @@
+/**
+ * 组件约定：
+ * - 后台技能详情内上传新版本统一走此弹窗，上传成功后由外层决定跳转或刷新。
+ * - 只接受 ZIP 并通过统一上传接口提交，不在前端推断版本规划逻辑。
+ */
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Alert, Modal, Typography, Upload } from "antd";
+import { Alert, Modal, Typography, Upload, message } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import { apiRequest } from "../lib/api";
@@ -39,9 +44,15 @@ export function SkillUploadModal({ open, token, onClose, onSuccess, modalId }: S
       });
     },
     onSuccess: (payload) => {
+      message.success(
+        payload.created_skill ? "技能包已上传，技能主档已创建，版本已进入待审核。" : "新版本已上传，已进入待审核。",
+      );
       setFileList([]);
       onSuccess(payload);
       onClose();
+    },
+    onError: (error: Error) => {
+      message.error(error.message);
     },
   });
 
@@ -60,7 +71,10 @@ export function SkillUploadModal({ open, token, onClose, onSuccess, modalId }: S
       wrapProps={modalId ? { id: modalId } : undefined}
     >
       <Typography.Paragraph>
-        只支持根目录包含 <code>skill.yaml</code> 和 <code>README.md</code> 的 ZIP 技能包。
+        只支持根目录包含 <code>skill.yaml</code> 和 <code>README.md</code> 的 ZIP 技能包。{" "}
+        <a href="/downloads/skill-package-demo.zip" download>
+          下载示例 ZIP
+        </a>
       </Typography.Paragraph>
       <Upload.Dragger
         accept=".zip"

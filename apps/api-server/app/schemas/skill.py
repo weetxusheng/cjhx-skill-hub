@@ -1,3 +1,5 @@
+"""技能与版本相关的 Pydantic 模型：列表项、详情、上传响应、PATCH 与动作请求等。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -46,6 +48,21 @@ class PublicSkillListItem(BaseModel):
     like_count: int
     published_at: datetime | None
     icon_file_id: UUID | None
+
+
+class PortalUploadRecordItem(BaseModel):
+    version_id: UUID
+    skill_id: UUID
+    skill_name: str
+    skill_slug: str
+    category_name: str
+    category_slug: str
+    version: str
+    review_status: SkillVersionStatus
+    review_comment: str | None
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class SkillVersionSummary(BaseModel):
@@ -183,6 +200,7 @@ class AdminVersionCapabilities(BaseModel):
     publish: bool
     archive: bool
     rollback: bool
+    download_package: bool
 
 
 class AdminVersionDetailResponse(BaseModel):

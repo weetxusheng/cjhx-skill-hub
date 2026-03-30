@@ -11,11 +11,11 @@ const queryClient = new QueryClient();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ConfigProvider
-      componentSize="small"
+      componentSize="middle"
       theme={{
         token: {
           colorPrimary: "#1677ff",
-          borderRadius: 14,
+          borderRadius: 4,
           fontFamily: "'PingFang SC', 'Noto Sans SC', sans-serif",
         },
       }}

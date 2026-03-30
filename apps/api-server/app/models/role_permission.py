@@ -1,3 +1,5 @@
+"""角色与权限的多对多关联。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class RolePermission(Base):
+    """复合主键 (role_id, permission_id) 表示一条授权。"""
+
     __tablename__ = "role_permissions"
 
     role_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)

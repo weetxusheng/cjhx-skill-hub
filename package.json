@@ -16,11 +16,20 @@
     "preview:portal": "pnpm --filter portal-web preview",
     "preview:admin": "pnpm --filter admin-web preview",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
+    "lint:web": "pnpm --filter admin-web lint && pnpm --filter portal-web lint",
+    "lint:api": "cd apps/api-server && .venv/bin/ruff check app tests scripts",
+    "lint:quality": "bash infra/scripts/check-code-quality.sh",
+    "lint": "pnpm lint:web && pnpm lint:api && pnpm lint:quality",
     "test:e2e": "playwright test",
     "release:check": "bash infra/scripts/release-check.sh"
   },
   "devDependencies": {
-    "@playwright/test": "^1.53.2"
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.53.2",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "typescript-eslint": "^8.57.2"
   }
 }

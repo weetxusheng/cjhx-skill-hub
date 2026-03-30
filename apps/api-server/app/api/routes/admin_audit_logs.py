@@ -1,3 +1,5 @@
+"""审计日志：分页查询与 CSV 导出。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -25,6 +27,7 @@ def list_audit_logs(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_permissions("admin.audit.view")),
 ) -> dict:
+    """分页返回审计记录，支持 actor/action/目标类型与时间范围筛选。"""
     payload = list_audit_logs_paginated(
         db,
         actor_query=actor,
@@ -49,6 +52,7 @@ def export_audit_logs(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_permissions("admin.audit.export")),
 ) -> Response:
+    """导出 CSV（行数上限由 limit 控制）；需单独导出权限。"""
     items = list_audit_logs_for_export(
         db,
         actor_query=actor,

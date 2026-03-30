@@ -1,4 +1,9 @@
-import { useEffect, useState } from "react";
+/**
+ * 组件约定：
+ * - 统一承载提交审核、通过、拒绝、发布、归档、回滚等动作的确认输入弹窗。
+ * - 是否必填说明由 `required` 控制；真正动作语义与状态机校验由调用方决定。
+ */
+import { useState } from "react";
 import { Alert, Input, Modal, Typography } from "antd";
 
 type VersionActionModalProps = {
@@ -27,12 +32,6 @@ export function VersionActionModal({
   onSubmit,
 }: VersionActionModalProps) {
   const [comment, setComment] = useState(defaultComment);
-
-  useEffect(() => {
-    if (open) {
-      setComment(defaultComment);
-    }
-  }, [defaultComment, open]);
 
   return (
     <Modal

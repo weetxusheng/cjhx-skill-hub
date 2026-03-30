@@ -1,3 +1,5 @@
+"""版本审核与发布动作流水：供历史时间线与审计展示。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class VersionReview(Base):
+    """针对某 `skill_version_id` 的一次审核/发布类动作记录。"""
+
     __tablename__ = "version_reviews"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

@@ -1,3 +1,5 @@
+"""技能级授权：通过全局角色授予某 skill 的作用域。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class SkillRoleGrant(Base):
+    """某角色在某技能上的 `permission_scope`（view/edit/owner 等）。"""
+
     __tablename__ = "skill_role_grants"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

@@ -19,7 +19,7 @@ from app.models.skill_user_grant import SkillUserGrant
 from app.models.skill_version import SkillVersion
 from app.models.user import User
 from app.models.user_role import UserRole
-from tests.support.factories import create_skill_version_record, make_skill_zip
+from tests.support.factories import create_skill_version_record
 
 
 def _login(client: TestClient, username: str, password: str) -> dict:
@@ -143,6 +143,18 @@ def test_upload_rejects_duplicate_version(client: TestClient, db_session: Sessio
     assert response.status_code == 409
 
 
+def test_admin_can_download_uploaded_version_package(client: TestClient, db_session: Session) -> None:
+    _create_published_workflow_skill(db_session)
+    admin = _login(client, "admin", "ChangeMe123!")
+    files = {"file": ("pkg-dl.zip", _make_zip(slug="workflow-copilot", version="9.9.9"), "application/zip")}
+    upload_response = client.post("/api/admin/skills/upload", files=files, headers={"Authorization": f"Bearer {admin['access_token']}"})
+    assert upload_response.status_code == 200
+    version_id = upload_response.json()["data"]["version_id"]
+    dl = client.get(f"/api/admin/versions/{version_id}/package", headers={"Authorization": f"Bearer {admin['access_token']}"})
+    assert dl.status_code == 200
+    assert dl.content[:2] == b"PK"
+
+
 def test_full_upload_submit_approve_publish_flow(client: TestClient, db_session: Session) -> None:
     contributor = _create_user_with_role(db_session, "contributor", "flow_contributor")
     reviewer = _create_user_with_role(db_session, "reviewer", "flow_reviewer")
@@ -160,13 +172,7 @@ def test_full_upload_submit_approve_publish_flow(client: TestClient, db_session:
     )
     assert upload_response.status_code == 200
     version_id = upload_response.json()["data"]["version_id"]
-
-    submit_response = client.post(
-        f"/api/admin/versions/{version_id}/submit",
-        json={"comment": "ready for review"},
-        headers={"Authorization": f"Bearer {contributor_tokens['access_token']}"},
-    )
-    assert submit_response.status_code == 200
+    assert upload_response.json()["data"]["review_status"] == "submitted"
 
     approve_response = client.post(
         f"/api/admin/versions/{version_id}/approve",
@@ -239,11 +245,6 @@ def test_reject_requires_comment(client: TestClient, db_session: Session) -> Non
         headers={"Authorization": f"Bearer {contributor_tokens['access_token']}"},
     )
     version_id = upload_response.json()["data"]["version_id"]
-    client.post(
-        f"/api/admin/versions/{version_id}/submit",
-        json={"comment": ""},
-        headers={"Authorization": f"Bearer {contributor_tokens['access_token']}"},
-    )
 
     reject_response = client.post(
         f"/api/admin/versions/{version_id}/reject",
@@ -379,15 +380,49 @@ def test_skill_and_version_detail_capabilities_follow_scope_and_status(client: T
         headers={"Authorization": f"Bearer {reviewer_tokens['access_token']}"},
     )
     assert reviewer_version_detail.status_code == 200
+    assert reviewer_version_detail.json()["data"]["capabilities"]["edit_content"] is True
     assert reviewer_version_detail.json()["data"]["capabilities"]["approve"] is True
     assert reviewer_version_detail.json()["data"]["capabilities"]["reject"] is True
+
+    reviewer_patch = client.patch(
+        f"/api/admin/versions/{submitted_version.id}",
+        json={
+            "changelog": "审核中修订",
+            "install_notes": "",
+            "breaking_changes": "",
+            "readme_markdown": "# Detail Capabilities Review\n\npatched by reviewer\n",
+            "usage_guide_json": {
+                "agent": {"standard_prompt": "rp", "accelerated_prompt": "ra"},
+                "human": {"standard_command": "rs", "accelerated_command": "rt", "post_install_command": "ru"},
+            },
+        },
+        headers={"Authorization": f"Bearer {reviewer_tokens['access_token']}"},
+    )
+    assert reviewer_patch.status_code == 200
 
     publisher_version_detail = client.get(
         f"/api/admin/versions/{approved_version.id}",
         headers={"Authorization": f"Bearer {publisher_tokens['access_token']}"},
     )
     assert publisher_version_detail.status_code == 200
+    assert publisher_version_detail.json()["data"]["capabilities"]["edit_content"] is True
     assert publisher_version_detail.json()["data"]["capabilities"]["publish"] is True
+
+    publisher_patch = client.patch(
+        f"/api/admin/versions/{approved_version.id}",
+        json={
+            "changelog": "发布前修订",
+            "install_notes": "",
+            "breaking_changes": "",
+            "readme_markdown": "# Detail Capabilities Release\n\npatched by publisher\n",
+            "usage_guide_json": {
+                "agent": {"standard_prompt": "pp", "accelerated_prompt": "pa"},
+                "human": {"standard_command": "ps", "accelerated_command": "pt", "post_install_command": "pu"},
+            },
+        },
+        headers={"Authorization": f"Bearer {publisher_tokens['access_token']}"},
+    )
+    assert publisher_patch.status_code == 200
 
     rollback_version_detail = client.get(
         f"/api/admin/versions/{archived_version.id}",
@@ -550,7 +585,6 @@ def test_publish_archives_previous_version_and_rollback_restores_history(client:
 
     upload_response = client.post("/api/admin/skills/upload", files=files, headers={"Authorization": f"Bearer {admin['access_token']}"})
     version_id = upload_response.json()["data"]["version_id"]
-    client.post(f"/api/admin/versions/{version_id}/submit", json={"comment": ""}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     client.post(f"/api/admin/versions/{version_id}/approve", json={"comment": ""}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     publish_response = client.post(f"/api/admin/versions/{version_id}/publish", json={"comment": "publish"}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     assert publish_response.status_code == 200
@@ -620,7 +654,7 @@ def test_rollback_uses_dedicated_skill_scope(client: TestClient, db_session: Ses
     assert rollback_response.status_code == 200
 
 
-def test_draft_version_does_not_override_public_skill_metadata_before_publish(client: TestClient, db_session: Session) -> None:
+def test_submitted_version_does_not_override_public_skill_metadata_before_publish(client: TestClient, db_session: Session) -> None:
     _create_published_workflow_skill(db_session)
     admin = _login(client, "admin", "ChangeMe123!")
     files = {
@@ -673,7 +707,6 @@ def test_draft_version_does_not_override_public_skill_metadata_before_publish(cl
         headers={"Authorization": f"Bearer {admin['access_token']}"},
     )
     assert version_patch.status_code == 200
-    client.post(f"/api/admin/versions/{version_id}/submit", json={"comment": ""}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     client.post(f"/api/admin/versions/{version_id}/approve", json={"comment": ""}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     publish_response = client.post(f"/api/admin/versions/{version_id}/publish", json={"comment": "publish"}, headers={"Authorization": f"Bearer {admin['access_token']}"})
     assert publish_response.status_code == 200

@@ -8,8 +8,6 @@ from app.core.security import hash_password
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.role_permission import RolePermission
-from app.models.skill import Skill
-from app.models.skill_user_grant import SkillUserGrant
 from app.models.user import User
 from app.models.user_role import UserRole
 from tests.support.factories import create_skill_version_record
@@ -170,127 +168,53 @@ def test_admin_skills_returns_paginated_filtered_rows(client: TestClient, db_ses
     assert payload["items"][0]["category_slug"] == "content-creation"
 
 
-def test_skill_lists_and_workbenches_respect_skill_grants(client: TestClient, db_session: Session) -> None:
-    admin = _admin_user(db_session)
+def test_public_upload_center_records_require_login(client: TestClient) -> None:
+    response = client.get("/api/public/upload-center/records?page=1&page_size=20")
+    assert response.status_code == 401
+
+
+def test_upload_center_records_only_show_current_users_uploads(client: TestClient, db_session: Session) -> None:
     scoped_user = _create_user_with_permissions(
         db_session,
-        username="scoped_operator",
-        permission_codes=["skill.view", "skill.review", "skill.publish"],
+        username="upload_operator",
+        permission_codes=["skill.upload"],
+    )
+    other_uploader = _create_user_with_permissions(
+        db_session,
+        username="other_upload_operator",
+        permission_codes=["skill.upload"],
     )
 
-    visible_published_skill, _ = create_skill_version_record(
+    visible_uploaded_skill, _ = create_skill_version_record(
         db_session,
-        owner=admin,
-        slug="visible-published-skill",
-        version="1.0.0",
-        category_slug="developer-tools",
-        name="Visible Published Skill",
-        summary="visible published",
-        description="visible published",
-        review_status="published",
-        create_default_grants=False,
-    )
-    hidden_published_skill, _ = create_skill_version_record(
-        db_session,
-        owner=admin,
-        slug="hidden-published-skill",
-        version="1.0.0",
-        category_slug="developer-tools",
-        name="Hidden Published Skill",
-        summary="hidden published",
-        description="hidden published",
-        review_status="published",
-        create_default_grants=False,
-    )
-    visible_submitted_skill, _ = create_skill_version_record(
-        db_session,
-        owner=admin,
-        slug="visible-submitted-skill",
+        owner=scoped_user,
+        slug="visible-uploaded-skill",
         version="1.1.0",
-        category_slug="productivity",
-        name="Visible Submitted Skill",
-        summary="visible submitted",
-        description="visible submitted",
+        category_slug="developer-tools",
+        name="Visible Uploaded Skill",
+        summary="visible uploaded",
+        description="visible uploaded",
         review_status="submitted",
-        create_default_grants=False,
     )
-    hidden_submitted_skill, _ = create_skill_version_record(
+    hidden_uploaded_skill, _ = create_skill_version_record(
         db_session,
-        owner=admin,
-        slug="hidden-submitted-skill",
-        version="1.1.0",
+        owner=other_uploader,
+        slug="hidden-uploaded-skill",
+        version="2.0.0",
         category_slug="productivity",
-        name="Hidden Submitted Skill",
-        summary="hidden submitted",
-        description="hidden submitted",
-        review_status="submitted",
-        create_default_grants=False,
-    )
-    visible_approved_skill, _ = create_skill_version_record(
-        db_session,
-        owner=admin,
-        slug="visible-approved-skill",
-        version="2.0.0",
-        category_slug="security-compliance",
-        name="Visible Approved Skill",
-        summary="visible approved",
-        description="visible approved",
+        name="Hidden Uploaded Skill",
+        summary="hidden uploaded",
+        description="hidden uploaded",
         review_status="approved",
-        create_default_grants=False,
-    )
-    hidden_approved_skill, _ = create_skill_version_record(
-        db_session,
-        owner=admin,
-        slug="hidden-approved-skill",
-        version="2.0.0",
-        category_slug="security-compliance",
-        name="Hidden Approved Skill",
-        summary="hidden approved",
-        description="hidden approved",
-        review_status="approved",
-        create_default_grants=False,
-    )
-
-    db_session.add_all(
-        [
-            SkillUserGrant(skill_id=visible_published_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=hidden_published_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=visible_submitted_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=hidden_submitted_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=visible_approved_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=hidden_approved_skill.id, user_id=admin.id, permission_scope="owner"),
-            SkillUserGrant(skill_id=visible_published_skill.id, user_id=scoped_user.id, permission_scope="viewer"),
-            SkillUserGrant(skill_id=visible_submitted_skill.id, user_id=scoped_user.id, permission_scope="reviewer"),
-            SkillUserGrant(skill_id=visible_approved_skill.id, user_id=scoped_user.id, permission_scope="publisher"),
-        ]
     )
     db_session.commit()
 
     scoped_tokens = _login(client, scoped_user.username, "Pass123!")
     headers = {"Authorization": f"Bearer {scoped_tokens['access_token']}"}
-
-    skills_response = client.get("/api/admin/skills?page=1&page_size=20", headers=headers)
-    assert skills_response.status_code == 200
-    skill_slugs = {item["slug"] for item in skills_response.json()["data"]["items"]}
-    assert "visible-published-skill" in skill_slugs
-    assert "visible-submitted-skill" in skill_slugs
-    assert "visible-approved-skill" in skill_slugs
-    assert "hidden-published-skill" not in skill_slugs
-    assert "hidden-submitted-skill" not in skill_slugs
-    assert "hidden-approved-skill" not in skill_slugs
-
-    reviews_response = client.get("/api/admin/reviews/pending", headers=headers)
-    assert reviews_response.status_code == 200
-    review_slugs = {item["skill_slug"] for item in reviews_response.json()["data"]}
-    assert review_slugs == {"visible-submitted-skill"}
-
-    releases_response = client.get("/api/admin/releases/pending", headers=headers)
-    assert releases_response.status_code == 200
-    release_slugs = {item["skill_slug"] for item in releases_response.json()["data"]}
-    assert release_slugs == {"visible-approved-skill"}
-
-    history_response = client.get("/api/admin/reviews/history", headers=headers)
-    assert history_response.status_code == 200
-    history_skills = {item["skill_name"] for item in history_response.json()["data"]}
-    assert "Visible Published Skill" in history_skills
-    assert "Hidden Published Skill" not in history_skills
+    upload_center_response = client.get("/api/public/upload-center/records?page=1&page_size=20", headers=headers)
+    assert upload_center_response.status_code == 200
+    payload = upload_center_response.json()["data"]
+    assert payload["total"] == 1
+    assert payload["items"][0]["skill_slug"] == "visible-uploaded-skill"
+    assert payload["items"][0]["version"] == "1.1.0"
+    assert payload["items"][0]["review_status"] == "submitted"

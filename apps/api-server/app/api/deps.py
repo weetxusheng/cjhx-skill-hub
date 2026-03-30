@@ -1,3 +1,5 @@
+"""FastAPI 依赖：Bearer 解析、当前用户、权限/角色装饰器工厂。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +20,8 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 @dataclass
 class CurrentUser:
+    """已从 access token 解析并加载权限后的当前用户视图（非 ORM 实体）。"""
+
     id: UUID
     username: str
     display_name: str
@@ -31,6 +35,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> CurrentUser:
+    """要求请求携带合法 Bearer access token，否则 401。"""
     return _resolve_current_user(credentials, db)
 
 
@@ -38,6 +43,7 @@ def get_optional_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> CurrentUser | None:
+    """无 Authorization 时返回 None；token 无效仍抛 401。"""
     if credentials is None:
         return None
     try:
@@ -52,6 +58,7 @@ def _resolve_current_user(
     credentials: HTTPAuthorizationCredentials | None,
     db: Session,
 ) -> CurrentUser:
+    """校验 JWT typ=sub，加载活跃用户及角色权限列表。"""
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
 
@@ -90,6 +97,8 @@ def _resolve_current_user(
 
 
 def require_permissions(*required_permissions: str):
+    """依赖工厂：当前用户须同时具备给定权限点集合，否则 403。"""
+
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if not set(required_permissions).issubset(set(current_user.permissions)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")
@@ -99,6 +108,8 @@ def require_permissions(*required_permissions: str):
 
 
 def require_any_permissions(*allowed_permissions: str):
+    """依赖工厂：当前用户须具备任一列出的权限点，否则 403。"""
+
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if not set(allowed_permissions).intersection(set(current_user.permissions)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")
@@ -108,6 +119,8 @@ def require_any_permissions(*allowed_permissions: str):
 
 
 def require_roles(*allowed_roles: str):
+    """依赖工厂：当前用户须拥有任一列出的角色 code，否则 403。"""
+
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if not any(role in current_user.roles for role in allowed_roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")

@@ -292,7 +292,7 @@ def test_admin_can_view_user_skill_grants_from_user_management(client: TestClien
     assert by_skill["User Direct Skill"]["inherited_scopes"] == []
     assert by_skill["User Inherited Skill"]["direct_scopes"] == []
     assert by_skill["User Inherited Skill"]["inherited_scopes"] == ["reviewer"]
-    assert by_skill["User Inherited Skill"]["inherited_roles"] == [f"{inherited_role.name} ({inherited_role.code})"]
+    assert by_skill["User Inherited Skill"]["inherited_roles"] == [inherited_role.name]
     assert by_skill["User Hybrid Skill"]["effective_scopes"] == ["publisher", "viewer"]
     assert by_skill["User Hybrid Skill"]["direct_scopes"] == ["viewer"]
     assert by_skill["User Hybrid Skill"]["inherited_scopes"] == ["publisher"]
@@ -303,8 +303,10 @@ def test_upload_failure_cleans_temporary_objects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = get_settings()
-    packages_before = {item.name for item in (settings.storage_dir / "packages").glob("*")} if (settings.storage_dir / "packages").exists() else set()
-    readmes_before = {item.name for item in (settings.storage_dir / "readmes").glob("*")} if (settings.storage_dir / "readmes").exists() else set()
+    upload_pkg_dir = settings.storage_dir / settings.skill_package_upload_subdir
+    readme_dir = settings.storage_dir / settings.skill_readme_subdir
+    packages_before = {item.name for item in upload_pkg_dir.glob("*")} if upload_pkg_dir.exists() else set()
+    readmes_before = {item.name for item in readme_dir.glob("*")} if readme_dir.exists() else set()
     admin = _login(client, "admin", "ChangeMe123!")
 
     def explode(*args, **kwargs):
@@ -331,7 +333,7 @@ def test_upload_failure_cleans_temporary_objects(
         )
     assert response.status_code == 500
 
-    packages_after = {item.name for item in (settings.storage_dir / "packages").glob("*")} if (settings.storage_dir / "packages").exists() else set()
-    readmes_after = {item.name for item in (settings.storage_dir / "readmes").glob("*")} if (settings.storage_dir / "readmes").exists() else set()
+    packages_after = {item.name for item in upload_pkg_dir.glob("*")} if upload_pkg_dir.exists() else set()
+    readmes_after = {item.name for item in readme_dir.glob("*")} if readme_dir.exists() else set()
     assert packages_after == packages_before
     assert readmes_after == readmes_before

@@ -1,3 +1,5 @@
+"""后台写操作审计：actor、动作与变更前后快照。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class AuditLog(Base):
+    """不可变审计行；`before_json`/`after_json` 为可选结构化 diff。"""
+
     __tablename__ = "audit_logs"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

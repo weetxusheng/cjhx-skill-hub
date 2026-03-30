@@ -1,3 +1,5 @@
+"""SQLAlchemy Engine、Session 工厂与 FastAPI `get_db` 依赖。"""
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -19,6 +21,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expi
 
 
 def get_db() -> Generator[Session, None, None]:
+    """请求级数据库会话：yield 后务必在 finally 关闭。"""
     db = SessionLocal()
     try:
         yield db

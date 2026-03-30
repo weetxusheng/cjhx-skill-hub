@@ -22,6 +22,14 @@
 - `docs`：正式规范、流程和运行手册
 - `infra`：systemd、nginx、脚本、发布检查
 
+### 结构事实来源分工
+- 本文件负责运行拓扑、层级职责和核心模块关系
+- `docs/10-architecture/domain-module-map.md` 负责领域模块、目录落点与跨层调用边界
+- `docs/20-engineering/page-spec-template.md` 负责页面规格模板与页面级结构约束
+- `docs/20-engineering/engineering-handbook.md` 负责前后端实现、评审与代码质量规则
+- `docs/20-engineering/data-and-db-handbook.md` 负责表设计、migration 与 seed 规则
+- `docs/20-engineering/api-testing-and-release.md` 负责 API 契约、测试层级与发布门禁
+
 ### 应用边界
 - `portal-web`
   - 只负责用户端发现、详情、互动和上传入口
@@ -59,6 +67,23 @@
 
 ### `app/core`
 - 配置、数据库、日志、中间件、限流、缓存工具
+
+## Domain Decomposition
+### 后端业务域
+- `auth`：登录、刷新、会话与全局权限聚合
+- `skills`：主档、公开列表、详情、展示信息编辑
+- `versions`：README、usage guide、manifest、版本详情
+- `reviews`：提审、审核、拒绝、审核记录
+- `releases`：待发布、发布、归档、回滚
+- `grants`：skill 级授权与 capability 计算
+- `stats`：点赞、收藏、下载与运营数据面
+- `governance`：分类、用户、角色、权限、审计日志
+
+### 前端页面域
+- `portal-web`：marketplace / detail drawer / upload center
+- `admin-web`：workbench / detail / governance / auth
+
+更细的目录落点与“扩已有模块还是新建模块”规则详见 `docs/10-architecture/domain-module-map.md`。
 
 ## Frontend Architecture
 ### `portal-web`
@@ -104,6 +129,18 @@
 - 明细来自 `favorites`、`skill_likes`、`download_logs`
 - 汇总来自 `skills.favorite_count`、`skills.like_count`、`skills.download_count`
 - skill 详情页聚合展示汇总、趋势和明细
+
+## Structural Decision Rules
+### 什么时候扩已有模块
+- 只是给现有列表补筛选、排序、摘要字段
+- 只是给现有详情补一个与当前主语一致的区块
+- 只是给现有状态机补同域动作，但不改变域边界
+
+### 什么时候新建子模块或新文档规格
+- 新能力拥有独立主语、独立导航或独立状态机
+- 页面已从单一列表升级为工作台
+- 数据结构已出现“明细表 + 冗余字段 + 独立查询口径”的组合
+- 现有实现已无法从单个域文档解释清楚
 
 ## Infrastructure Boundaries
 ### PostgreSQL

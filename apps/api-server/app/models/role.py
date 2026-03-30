@@ -1,3 +1,5 @@
+"""全局角色：系统角色与用户可管理角色的元数据。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,6 +12,8 @@ from app.db.base import Base
 
 
 class Role(Base):
+    """角色定义；`is_system` 防止误删系统内置角色。"""
+
     __tablename__ = "roles"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

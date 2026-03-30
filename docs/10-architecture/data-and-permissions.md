@@ -1,6 +1,8 @@
 # 数据与权限模型
 
 ## 核心表
+- `departments`（一级部门主数据：`id` + 展示名 `name`）
+- `users`（`primary_department_id` 外键关联 `departments.id`，界面只展示 `name`）
 - `skills`
 - `skill_versions`
 - `version_reviews`
@@ -78,9 +80,16 @@
 |---|---|
 | `owner` | 查看、编辑、上传版本、提审、审核、发布、归档、回滚、配置授权 |
 | `maintainer` | 查看、编辑、上传版本、提审 |
-| `reviewer` | 查看、审核 |
-| `publisher` | 查看、发布、归档、回滚 |
+| `reviewer` | 查看、审核、待审版本文案编辑（需全局 `skill.review`） |
+| `publisher` | 查看、发布、归档、回滚、待发布版本文案编辑（需全局 `skill.publish`） |
 | `viewer` | 查看 |
+
+## 版本文案后台编辑（PATCH `/admin/versions/{version_id}`）
+与版本生命周期状态组合判定（均需先满足 `skill.view` 与对应 skill scope）：
+- `draft` / `rejected`：全局 `skill.version.edit`，scope `maintainer` 或 `owner`
+- `submitted`：全局 `skill.review`，scope `reviewer` 或 `owner`
+- `approved`：全局 `skill.publish`，scope `publisher` 或 `owner`
+- `published` / `archived`：全局 `skill.version.edit`，scope `maintainer` 或 `owner`
 
 ## 全局权限与 Skill Scope 映射
 | 全局权限 | 需要的最小 Skill Scope |

@@ -1,3 +1,5 @@
+"""标签主数据：名称与 slug。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,6 +12,8 @@ from app.db.base import Base
 
 
 class Tag(Base):
+    """可被多技能引用的标签实体。"""
+
     __tablename__ = "tags"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

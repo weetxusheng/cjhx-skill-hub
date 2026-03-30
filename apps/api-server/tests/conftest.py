@@ -32,9 +32,15 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("LOG_LEVEL", "INFO")
 os.environ.setdefault("LOG_FORMAT", "json")
 os.environ.setdefault("STORAGE_BACKEND", "local")
-os.environ.setdefault("FILE_STORAGE_PATH", "./storage")
-os.environ.setdefault("ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:4173,http://127.0.0.1:4174")
-os.environ.setdefault("CORS_ORIGINS", "http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:4173,http://127.0.0.1:4174")
+os.environ.setdefault("FILE_STORAGE_PATH", "apps/api-server/storage")
+os.environ.setdefault(
+    "ALLOWED_ORIGINS",
+    "http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:4173,http://127.0.0.1:4174",
+)
+os.environ.setdefault(
+    "CORS_ORIGINS",
+    "http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:4173,http://127.0.0.1:4174",
+)
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 

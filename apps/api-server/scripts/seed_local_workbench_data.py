@@ -1,3 +1,10 @@
+"""本地工作台测试数据注入脚本。
+
+- 职责：为本地 PostgreSQL 与本地存储生成一套可联调的技能、版本、审核和互动数据。
+- 边界：仅用于本地 workbench / smoke 场景，不作为生产初始化脚本。
+- 禁止：不要在业务请求路径中直接调用；需要显式执行脚本入口。
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -10,6 +17,7 @@ from sqlalchemy import delete, select, update
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.category import Category
+from app.models.department import Department
 from app.models.download_log import DownloadLog
 from app.models.favorite import Favorite
 from app.models.file_asset import FileAsset
@@ -63,7 +71,28 @@ def _build_skill_zip(*, name: str, slug: str, version: str, summary: str, descri
     return buffer.getvalue()
 
 
-def _ensure_user(session, *, username: str, display_name: str, email: str, role_codes: list[str]) -> User:
+def _ensure_department(session, name: str | None):
+    """按展示名解析或创建一级部门，返回 `departments.id`。"""
+    if name is None or not str(name).strip():
+        return None
+    cleaned = str(name).strip()
+    dep = session.execute(select(Department).where(Department.name == cleaned)).scalar_one_or_none()
+    if dep is None:
+        dep = Department(name=cleaned)
+        session.add(dep)
+        session.flush()
+    return dep.id
+
+
+def _ensure_user(
+    session,
+    *,
+    username: str,
+    display_name: str,
+    email: str,
+    role_codes: list[str],
+    primary_department_name: str | None = None,
+) -> User:
     user = session.execute(select(User).where(User.username == username)).scalar_one_or_none()
     if user is None:
         user = User(
@@ -71,6 +100,7 @@ def _ensure_user(session, *, username: str, display_name: str, email: str, role_
             password_hash=hash_password(DEFAULT_PASSWORD),
             display_name=display_name,
             email=email,
+            primary_department_id=_ensure_department(session, primary_department_name),
             status="active",
         )
         session.add(user)
@@ -79,6 +109,8 @@ def _ensure_user(session, *, username: str, display_name: str, email: str, role_
         user.display_name = display_name
         user.email = email
         user.status = "active"
+        if primary_department_name is not None:
+            user.primary_department_id = _ensure_department(session, primary_department_name)
 
     role_ids = list(session.execute(select(Role.id).where(Role.code.in_(role_codes), Role.is_active.is_(True))).scalars())
     current_role_ids = set(session.execute(select(UserRole.role_id).where(UserRole.user_id == user.id)).scalars())
@@ -260,14 +292,26 @@ def _cleanup_existing_fixtures(session) -> None:
 
 
 def seed_local_workbench_data() -> dict[str, int]:
+    """向本地数据库和对象存储写入一套可演示的技能工作台数据。
+
+    意图：
+      - 提供待审核、待发布、已发布、已拒绝、草稿与归档历史等完整闭环样例。
+    边界：
+      - 依赖本地角色、分类和 admin 账号已存在。
+      - 会先清理 `FIXTURE_PREFIX` 下的旧样例数据。
+    副作用：
+      - 写入/删除数据库记录
+      - 写入/删除本地对象存储中的 ZIP 与 README
+    """
     with SessionLocal() as session:
-        admin = session.execute(select(User).where(User.username == "admin")).scalar_one()
+        session.execute(select(User).where(User.username == "admin")).scalar_one()
         contributor = _ensure_user(
             session,
             username="fixture_contributor",
             display_name="Fixture Contributor",
             email="fixture-contributor@skillhub.local",
             role_codes=["contributor"],
+            primary_department_name="技术研发中心",
         )
         reviewer = _ensure_user(
             session,
@@ -275,6 +319,7 @@ def seed_local_workbench_data() -> dict[str, int]:
             display_name="Fixture Reviewer",
             email="fixture-reviewer@skillhub.local",
             role_codes=["reviewer"],
+            primary_department_name="质量与合规",
         )
         publisher = _ensure_user(
             session,
@@ -282,12 +327,49 @@ def seed_local_workbench_data() -> dict[str, int]:
             display_name="Fixture Publisher",
             email="fixture-publisher@skillhub.local",
             role_codes=["publisher"],
+            primary_department_name="产品运营",
         )
         observer = _ensure_user(
             session,
             username="fixture_observer",
             display_name="Fixture Observer",
             email="fixture-observer@skillhub.local",
+            role_codes=["viewer"],
+            primary_department_name="技术研发中心",
+        )
+        _ensure_user(
+            session,
+            username="chenxusheng",
+            display_name="陈旭升",
+            email="chenxusheng@cjhxfundtest.com",
+            role_codes=["viewer"],
+        )
+        _ensure_user(
+            session,
+            username="jiangyuxiang",
+            display_name="蒋宇向",
+            email="jiangyuxiang@cjhxfundtest.com",
+            role_codes=["viewer"],
+        )
+        stale_lanzhijia = session.execute(select(User).where(User.username == "lanzhijia")).scalar_one_or_none()
+        already_it = session.execute(select(User).where(User.username == "lanzhijiaIT")).scalar_one_or_none()
+        if stale_lanzhijia is not None and already_it is None:
+            stale_lanzhijia.username = "lanzhijiaIT"
+            stale_lanzhijia.display_name = "蓝志家IT"
+            stale_lanzhijia.email = "lanzhijiaIT@cjhxfundtest.com"
+            session.flush()
+        _ensure_user(
+            session,
+            username="lanzhijiaIT",
+            display_name="蓝志家IT",
+            email="lanzhijiaIT@cjhxfundtest.com",
+            role_codes=["viewer"],
+        )
+        _ensure_user(
+            session,
+            username="yuanailan",
+            display_name="袁爱兰",
+            email="yuanailan@cjhxfundtest.com",
             role_codes=["viewer"],
         )
 
@@ -652,6 +734,7 @@ def seed_local_workbench_data() -> dict[str, int]:
 
 
 def main() -> None:
+    """脚本入口：执行本地 workbench 数据注入并输出摘要。"""
     result = seed_local_workbench_data()
     print(
         "seeded local workbench data:",

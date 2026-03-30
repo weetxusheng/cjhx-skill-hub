@@ -1,3 +1,5 @@
+"""全局权限码定义：供角色绑定与接口鉴权解析。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,6 +12,8 @@ from app.db.base import Base
 
 
 class Permission(Base):
+    """稳定权限码 `code` 与展示名；`group_key` 用于 UI 分组。"""
+
     __tablename__ = "permissions"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

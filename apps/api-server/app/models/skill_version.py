@@ -1,3 +1,5 @@
+"""技能版本：包与 README 资产、审核状态与发布信息。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class SkillVersion(Base):
+    """单次上传对应的不可变版本行；`review_status` 驱动审核流。"""
+
     __tablename__ = "skill_versions"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

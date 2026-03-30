@@ -1,3 +1,5 @@
+"""技能分类：门户展示顺序与可见性。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,6 +12,8 @@ from app.db.base import Base
 
 
 class Category(Base):
+    """分类维度；`slug` 用于 URL 与筛选。"""
+
     __tablename__ = "categories"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

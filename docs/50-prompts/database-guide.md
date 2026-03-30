@@ -1,7 +1,7 @@
 # Database Prompt Guide
 
 ## 先读什么
-1. `docs/20-engineering/database-guide.md`
+1. `docs/20-engineering/data-and-db-handbook.md`
 2. `docs/10-architecture/data-and-permissions.md`
 
 ## 做什么

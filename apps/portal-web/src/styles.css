@@ -194,6 +194,13 @@ a {
   align-items: stretch;
 }
 
+/* 首页底部「交付流程」单栏全宽 */
+.marketplace-header--single {
+  grid-template-columns: 1fr;
+  max-width: 960px;
+  margin-inline: auto;
+}
+
 .marketplace-copy,
 .marketplace-summary-card,
 .marketplace-panel,
@@ -460,22 +467,92 @@ a {
 
 .toolbar-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: stretch;
 }
 
-.toolbar-search .ant-input-affix-wrapper,
 .toolbar-search.ant-input-affix-wrapper,
+.toolbar-search .ant-input-affix-wrapper,
 .toolbar-sort.ant-select .ant-select-selector {
   min-height: 52px !important;
   border-color: rgba(255, 123, 77, 0.12) !important;
   border-radius: 18px !important;
   box-shadow: none !important;
+  background: rgba(255, 255, 255, 0.92) !important;
 }
 
 .toolbar-search .ant-input-prefix {
   margin-right: 10px;
   color: var(--accent-strong);
+}
+
+.toolbar-search .ant-input {
+  font-size: 16px;
+}
+
+.toolbar-search .ant-input::placeholder {
+  color: rgba(103, 117, 141, 0.72);
+}
+
+.toolbar-search-suffix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+  background: rgba(255, 123, 77, 0.08);
+  color: var(--accent-strong);
+  font-size: 15px;
+}
+
+.toolbar-sort.ant-select {
+  width: 100%;
+  height: 52px;
+}
+
+.toolbar-sort.ant-select .ant-select-selector {
+  display: flex !important;
+  align-items: center !important;
+  height: 52px !important;
+  padding: 0 18px !important;
+}
+
+.toolbar-sort.ant-select .ant-select-selection-wrap {
+  align-items: center;
+}
+
+.toolbar-sort.ant-select .ant-select-selection-item,
+.toolbar-sort.ant-select .ant-select-selection-placeholder {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  color: var(--ink) !important;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.toolbar-sort.ant-select .ant-select-selection-placeholder {
+  color: rgba(103, 117, 141, 0.72) !important;
+  font-weight: 500;
+}
+
+.toolbar-sort.ant-select .ant-select-arrow {
+  display: grid;
+  place-items: center;
+  color: rgba(103, 117, 141, 0.72);
+  font-size: 14px;
+  inset-inline-end: 18px;
+  inset-block: 0 !important;
+  transform: none !important;
+  width: 20px;
+  height: auto;
+  line-height: 1;
+}
+
+.toolbar-sort.ant-select .ant-select-arrow .anticon {
+  transform: translateY(3px);
 }
 
 .results-head {
@@ -496,26 +573,40 @@ a {
   gap: 22px;
 }
 
+/* 技能卡片：关闭与广场其它卡片共用的 backdrop-filter，并去掉顶部伪元素，避免整块发蒙、发粉 */
 .skill-card {
-  border-radius: 28px !important;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px !important;
+  border: 1px solid rgba(36, 50, 74, 0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 250, 245, 0.96) 100%) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 12px 24px rgba(107, 82, 58, 0.08),
+    0 2px 6px rgba(107, 82, 58, 0.04) !important;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
   cursor: pointer;
 }
 
 .skill-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 28px 52px rgba(107, 82, 58, 0.12);
+  border-color: rgba(255, 123, 77, 0.22) !important;
+  box-shadow:
+    0 18px 34px rgba(107, 82, 58, 0.14),
+    0 6px 14px rgba(255, 123, 77, 0.08) !important;
 }
 
 .skill-card .ant-card-body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 24px !important;
+  padding: 20px !important;
 }
 
 .skill-card-wide {
-  min-height: 320px;
+  min-height: 300px;
   border-radius: 28px !important;
 }
 
@@ -523,7 +614,7 @@ a {
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .skill-card-heading {
@@ -537,6 +628,13 @@ a {
   color: var(--ink);
   font-size: 13px;
   font-weight: 700;
+}
+
+.skill-category-icon {
+  width: 48px;
+  height: 48px;
+  border-width: 1.5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .skill-card-date {
@@ -563,33 +661,42 @@ a {
   align-items: center;
   justify-content: center;
   align-self: flex-start;
-  padding: 7px 12px;
+  padding: 6px 11px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   background: rgba(255, 123, 77, 0.09);
   color: var(--accent-strong);
 }
 
 .skill-title {
-  margin-bottom: 10px !important;
+  margin-top: 5px !important;
+  margin-bottom: 8px !important;
   color: var(--ink) !important;
+  font-size: 18px !important;
+  line-height: 1.35 !important;
 }
 
 .skill-summary {
   flex: 1;
-  min-height: 72px;
-  margin-bottom: 18px !important;
+  min-height: 44px;
+  margin-bottom: 12px !important;
   color: var(--ink-soft) !important;
-  line-height: 1.75 !important;
+  line-height: 1.65 !important;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .skill-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(36, 50, 74, 0.08);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .skill-stats span {
@@ -599,7 +706,8 @@ a {
 }
 
 .skill-card-button {
-  height: 44px;
+  height: 40px;
+  margin-top: auto;
 }
 
 .pagination-row {
@@ -893,76 +1001,175 @@ a {
   font-family: "SFMono-Regular", "JetBrains Mono", monospace;
 }
 
-.portal-auth-drawer .ant-btn-primary,
-.portal-upload-modal .ant-btn-primary {
+.portal-auth-drawer .ant-btn-primary {
   border: 0 !important;
 }
 
-.auth-submit-button,
-.modal-submit-button,
-.modal-cancel-button {
-  min-width: 112px;
+.portal-upload-drawer .ant-drawer-header {
+  padding: 18px 22px;
+  border-bottom-color: rgba(36, 50, 74, 0.08);
 }
 
-.portal-upload-modal .ant-modal-content {
-  overflow: hidden;
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 245, 237, 0.95));
-  box-shadow: 0 32px 72px rgba(107, 82, 58, 0.18);
+.portal-upload-drawer .ant-drawer-body {
+  padding: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 204, 125, 0.18), transparent 22%),
+    linear-gradient(180deg, rgba(255, 251, 246, 0.96), rgba(255, 246, 238, 0.98));
 }
 
-.portal-upload-modal .ant-modal-header {
-  padding-bottom: 0;
-  background: transparent;
+.upload-center-shell {
+  display: grid;
+  gap: 16px;
 }
 
-.portal-upload-modal .ant-modal-title {
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 800;
+.upload-center-hero,
+.upload-center-dropzone-card,
+.upload-center-list-card {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 123, 77, 0.12);
+  background: rgba(255, 255, 255, 0.84);
 }
 
-.upload-modal-intro {
+.upload-center-hero h4,
+.upload-center-list-head h5,
+.upload-center-item h5 {
+  margin-bottom: 6px !important;
+}
+
+.upload-center-hero p {
+  margin-bottom: 0 !important;
+  color: var(--ink-soft) !important;
+}
+
+.upload-center-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.upload-center-hints span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 123, 77, 0.08);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-center-hints a {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 123, 77, 0.35);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.upload-center-hints a:hover {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.upload-center-list-head {
+  margin-bottom: 10px;
+}
+
+.upload-center-dropzone-card {
   display: grid;
   gap: 12px;
 }
 
-.upload-modal-hints {
+.upload-center-dropzone.ant-upload-wrapper .ant-upload-drag {
+  border-radius: 22px !important;
+  border-color: rgba(255, 123, 77, 0.18) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 238, 0.92)) !important;
+}
+
+.upload-center-dropzone.ant-upload-wrapper .ant-upload {
+  padding: 26px 20px !important;
+}
+
+.upload-center-dropzone-content {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.upload-center-dropzone-icon {
+  font-size: 28px;
+  color: var(--accent-strong);
+}
+
+.upload-center-dropzone-content h5,
+.upload-center-dropzone-content p {
+  margin: 0 !important;
+}
+
+.upload-center-dropzone-content p {
+  color: var(--ink-soft) !important;
+}
+
+.upload-center-loading {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+}
+
+.upload-center-list .ant-list-items {
+  display: grid;
+  gap: 12px;
+}
+
+.upload-center-list .ant-list-item {
+  padding: 0;
+  border-block-end: none;
+}
+
+.upload-center-item {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(36, 50, 74, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 248, 241, 0.88));
+}
+
+.upload-center-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-center-item-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.upload-modal-hints span {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: rgba(255, 123, 77, 0.09);
-  color: var(--accent-strong);
+  gap: 12px;
+  margin-top: 10px;
+  color: var(--ink-soft);
   font-size: 12px;
-  font-weight: 600;
 }
 
-.upload-dropzone.ant-upload-wrapper .ant-upload-drag {
-  margin-top: 14px;
-  border-radius: 22px !important;
-  border-color: rgba(255, 123, 77, 0.2) !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 245, 237, 0.92)) !important;
+.upload-center-version {
+  color: var(--ink);
+  font-weight: 700;
 }
 
-.upload-dropzone.ant-upload-wrapper .ant-upload-drag .ant-upload {
-  padding: 28px 18px !important;
-}
-
-.upload-dropzone.ant-upload-wrapper .ant-upload-text {
-  color: var(--ink) !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-}
-
-.upload-dropzone.ant-upload-wrapper .ant-upload-hint {
+.upload-center-record-note {
+  margin: 10px 0 0 !important;
   color: var(--ink-soft) !important;
+  font-size: 13px;
+}
+
+.auth-submit-button {
+  min-width: 112px;
 }
 
 @media (max-width: 1080px) {
@@ -1046,6 +1253,10 @@ a {
   }
 
   .usage-guide-card-head {
+    flex-direction: column;
+  }
+
+  .upload-center-item-head {
     flex-direction: column;
   }
 }

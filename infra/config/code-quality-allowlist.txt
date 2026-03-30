@@ -1,0 +1,12 @@
+apps/admin-web/src/components/AdminLayout.tsx
+apps/admin-web/src/pages/governance/RolesPage.tsx
+apps/admin-web/src/pages/governance/UsersPage.tsx
+apps/admin-web/src/pages/workbench/DashboardPage.tsx
+apps/admin-web/src/pages/detail/SkillDetailPage.tsx
+apps/admin-web/src/pages/workbench/SkillsPage.tsx
+apps/portal-web/src/pages/MarketplacePage.tsx
+apps/api-server/app/repositories/skills.py
+apps/api-server/app/services/governance.py
+apps/api-server/app/services/skills.py
+apps/api-server/scripts/seed_local_workbench_data.py
+apps/api-server/tests/test_skill_workflow.py

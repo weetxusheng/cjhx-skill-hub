@@ -22,6 +22,7 @@ uvicorn app.main:app --reload
 - PostgreSQL: local Homebrew service `postgresql@16`
 - Connection defaults come from `DATABASE_URL` / `TEST_DATABASE_URL` in the project root `.env` or `.env.example`
 - No Docker or Nginx is required for local development
+- Local package / readme objects default to `<repo>/.runtime/local-dev/storage`
 - 本地开发默认直接使用数据库当前真实数据；测试场景数据仅在自动化测试过程中按需动态创建，不通过仓库内预置 demo 数据集注入
 
 如需快速生成一套可手工联调的真实数据库记录，可执行：

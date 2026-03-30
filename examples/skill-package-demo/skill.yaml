@@ -1,0 +1,26 @@
+# -----------------------------------------------------------------------------
+# Skill Hub 技能包清单（文件名必须为 skill.yaml，且位于 ZIP 根目录）
+# category：填写后台「分类管理」里已有分类的 slug，不可用不存在的 slug
+# -----------------------------------------------------------------------------
+
+name: Skill Hub 示例技能（完整模板）
+slug: skill-hub-package-demo
+version: 1.0.0
+summary: |
+  官方演示包：包含完整 README、变更记录与清单字段说明，便于对照修改后上传。
+description: |
+  本包用于展示 Skill Hub 对上传 ZIP 的约定：根目录必须包含 skill.yaml 与 README.md，
+  其余文件（如 CHANGELOG.md）可选，会随整包存档，便于团队交付与审计。
+
+  使用步骤建议：
+  1. 复制本包并修改 skill.yaml 中的 name、slug、version、summary、description、category、tags。
+  2. 同步更新 README.md 中的「技能说明」与「版本记录」章节。
+  3. 在资源管理器中选中根目录文件并压缩为 ZIP，勿将文件夹本身再套一层。
+  4. 在前台上传中心或后台「上传技能包」提交；slug 与版本号在库内唯一。
+category: developer-tools
+tags:
+  - official-demo
+  - template
+  - starter
+  - documentation
+author: "Skill Hub Team <skill-hub-demo@example.local>"

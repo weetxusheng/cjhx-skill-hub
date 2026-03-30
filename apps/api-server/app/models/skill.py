@@ -1,3 +1,5 @@
+"""技能聚合根：展示信息、生命周期状态与当前发布版本指针。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class Skill(Base):
+    """市场侧技能实体；计数字段为运营展示用聚合值。"""
+
     __tablename__ = "skills"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

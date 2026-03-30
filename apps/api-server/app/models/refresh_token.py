@@ -1,3 +1,5 @@
+"""Refresh token 持久化：哈希存储与轮换作废。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class RefreshToken(Base):
+    """长期会话令牌行；登出或轮换时设置 `revoked_at`。"""
+
     __tablename__ = "refresh_tokens"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))

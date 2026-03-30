@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "lib": ["ES2022", "WebWorker"],
+    "outDir": "../../.cache/tsc/portal-web-node",
     "types": ["node"]
   },
   "include": ["vite.config.ts"]

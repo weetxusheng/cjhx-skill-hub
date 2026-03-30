@@ -1,3 +1,5 @@
+"""技能级授权：直接授予某用户在某 skill 上的作用域。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +13,8 @@ from app.db.base import Base
 
 
 class SkillUserGrant(Base):
+    """用户直接授权行，与角色继承授权并存。"""
+
     __tablename__ = "skill_user_grants"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
