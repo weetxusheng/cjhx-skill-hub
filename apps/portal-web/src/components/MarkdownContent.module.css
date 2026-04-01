@@ -1,0 +1,139 @@
+.root {
+  color: var(--ink);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.root > :first-child {
+  margin-top: 0;
+}
+
+.root > :last-child {
+  margin-bottom: 0;
+}
+
+.root h1,
+.root h2,
+.root h3,
+.root h4,
+.root h5,
+.root h6 {
+  margin: 1.3em 0 0.6em;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.root p,
+.root ul,
+.root ol,
+.root blockquote,
+.root pre,
+.root hr {
+  margin: 0 0 16px;
+}
+
+.root ul,
+.root ol {
+  padding-left: 1.5em;
+}
+
+.root li + li {
+  margin-top: 6px;
+}
+
+.root li > ul,
+.root li > ol {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.root input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.root a {
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+.root a:hover {
+  text-decoration: underline;
+}
+
+.root blockquote {
+  padding: 12px 16px;
+  border-left: 4px solid rgba(255, 123, 77, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 247, 242, 0.92);
+  color: var(--ink-soft);
+}
+
+.root hr {
+  border: none;
+  border-top: 1px solid rgba(36, 50, 74, 0.08);
+}
+
+.tableWrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.root table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  border-spacing: 0;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(36, 50, 74, 0.08);
+}
+
+.root th,
+.root td {
+  padding: 10px 12px;
+  border-right: 1px solid rgba(36, 50, 74, 0.08);
+  border-bottom: 1px solid rgba(36, 50, 74, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.root th:last-child,
+.root td:last-child {
+  border-right: none;
+}
+
+.root tr:last-child td {
+  border-bottom: none;
+}
+
+.root th {
+  background: rgba(255, 247, 242, 0.96);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.root pre {
+  overflow: auto;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(36, 50, 74, 0.06);
+}
+
+.root code {
+  font-family: "SFMono-Regular", "JetBrains Mono", monospace;
+}
+
+.root :not(pre) > code {
+  padding: 0.18em 0.45em;
+  border-radius: 8px;
+  background: rgba(36, 50, 74, 0.08);
+  color: var(--ink);
+}
+
+.root img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  border-radius: 18px;
+  border: 1px solid rgba(36, 50, 74, 0.08);
+}

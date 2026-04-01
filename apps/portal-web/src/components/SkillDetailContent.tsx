@@ -11,6 +11,7 @@ import dayjs from "dayjs";
 import { API_BASE_URL, apiRequest } from "../lib/api";
 import type { PublicSkillDetailResponse } from "../lib/portalTypes";
 import { CategoryIcon } from "./CategoryIcon";
+import { MarkdownContent } from "./MarkdownContent";
 import { UsageGuideSection } from "./UsageGuideSection";
 
 export function SkillDetailContent({
@@ -107,7 +108,7 @@ export function SkillDetailContent({
             className="drawer-category-icon"
           />
           <div className="detail-head-copy">
-            <Typography.Title level={2} style={{ marginBottom: 8 }}>
+            <Typography.Title level={2} style={{ marginBottom: 8, marginTop: 0 }}>
               {detail.skill.name}
             </Typography.Title>
             <Space wrap>
@@ -183,13 +184,17 @@ export function SkillDetailContent({
       <UsageGuideSection detail={detail} selectedUsageMode={selectedUsageMode} setUsageMode={setUsageMode} />
 
       <Card title="README" className="drawer-card">
-        <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: detail.current_version.readme_html }} />
+        {detail.current_version.readme_markdown ? (
+          <MarkdownContent markdown={detail.current_version.readme_markdown} />
+        ) : (
+          <Typography.Text type="secondary">暂无 README 内容</Typography.Text>
+        )}
       </Card>
 
       <Card title="更新说明" className="drawer-card">
         <Typography.Paragraph>{detail.current_version.changelog || "暂无更新说明"}</Typography.Paragraph>
         <Typography.Paragraph>安装说明：{detail.current_version.install_notes || "暂无安装说明"}</Typography.Paragraph>
-        <Typography.Paragraph>破坏性变更：{detail.current_version.breaking_changes || "暂无破坏性变更"}</Typography.Paragraph>
+        {/* <Typography.Paragraph>破坏性变更：{detail.current_version.breaking_changes || "暂无破坏性变更"}</Typography.Paragraph> */}
       </Card>
 
       <Card title="历史发布版本" className="drawer-card">

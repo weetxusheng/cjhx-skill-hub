@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class AdminScopeAssigneeItem(BaseModel):
+    target_id: UUID
+    target_type: Literal["user", "role"]
+    target_name: str
+    members: list[str] = []
 
 
 class AdminReviewListItem(BaseModel):
@@ -21,6 +29,7 @@ class AdminReviewListItem(BaseModel):
     latest_review_comment: str | None = None
     latest_action_at: datetime | None = None
     assigned_reviewers: list[str] = []
+    assigned_reviewer_details: list[AdminScopeAssigneeItem] = []
     assigned_publishers: list[str] = []
 
 

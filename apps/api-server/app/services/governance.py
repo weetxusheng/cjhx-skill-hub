@@ -1,3 +1,5 @@
+"""治理域服务：分类、角色、权限与后台用户管理。"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -33,13 +35,117 @@ from app.schemas.admin import (
 )
 from app.schemas.category import CategoryItem, CategoryUpsertRequest
 from app.schemas.common import PagedResponse
+from app.schemas.governance import (
+    SystemRoleContactItem,
+    SystemRoleContactRoleItem,
+    SystemRoleContactsResponse,
+)
 from app.services.audit import write_audit_log
 from app.services.auth import revoke_all_user_refresh_tokens
 from app.services.cache import delete_cached_json
 
-"""治理域服务：分类、角色、权限与后台用户管理。"""
-
 PROTECTED_SYSTEM_ROLE_CODES = {"admin"}
+
+
+def _normalize_system_role_codes(role_codes: Iterable[str]) -> list[str]:
+    """清洗并去重系统角色编码，保留调用方输入顺序。"""
+    normalized_codes: list[str] = []
+    seen_codes: set[str] = set()
+    for code in role_codes:
+        cleaned = code.strip()
+        if not cleaned or cleaned in seen_codes:
+            continue
+        normalized_codes.append(cleaned)
+        seen_codes.add(cleaned)
+    if not normalized_codes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少提供一个 system role code")
+    return normalized_codes
+
+
+def list_system_role_contacts(db: Session, *, role_codes: Iterable[str]) -> SystemRoleContactsResponse:
+    """按系统角色查询当前可联系用户摘要。
+
+    边界：
+    - 仅支持已启用的系统角色。
+    - 仅返回启用用户，避免展示已停用账号。
+    - 当同一用户命中多个系统角色时，按请求角色顺序去重聚合。
+    """
+    normalized_codes = _normalize_system_role_codes(role_codes)
+    roles = list(
+        db.execute(
+            select(Role)
+            .where(
+                Role.code.in_(normalized_codes),
+                Role.is_system.is_(True),
+                Role.is_active.is_(True),
+            )
+            .order_by(Role.created_at.asc())
+        ).scalars()
+    )
+    role_map = {role.code: role for role in roles}
+    missing_codes = [code for code in normalized_codes if code not in role_map]
+    if missing_codes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"系统角色不存在或不可用: {', '.join(missing_codes)}",
+        )
+
+    requested_roles = [
+        SystemRoleContactRoleItem(code=role_map[code].code, name=role_map[code].name)
+        for code in normalized_codes
+    ]
+    rows = db.execute(
+        select(
+            User.id.label("user_id"),
+            User.display_name.label("display_name"),
+            Department.id.label("department_id"),
+            Department.name.label("department_name"),
+            Role.code.label("role_code"),
+            Role.name.label("role_name"),
+        )
+        .select_from(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .outerjoin(Department, Department.id == User.primary_department_id)
+        .where(
+            User.status == "active",
+            Role.is_active.is_(True),
+            Role.is_system.is_(True),
+            Role.code.in_(normalized_codes),
+        )
+        .order_by(User.display_name.asc(), User.username.asc(), Role.created_at.asc(), Role.name.asc())
+    ).mappings()
+
+    contact_map: dict[UUID, dict[str, object]] = {}
+    for row in rows:
+        user_id = row["user_id"]
+        matched_role_map = contact_map.setdefault(
+            user_id,
+            {
+                "display_name": row["display_name"],
+                "primary_department": DepartmentBrief(id=row["department_id"], name=row["department_name"])
+                if row["department_id"] and row["department_name"]
+                else None,
+                "matched_role_map": {},
+            },
+        )["matched_role_map"]
+        matched_role_map[row["role_code"]] = row["role_name"]
+
+    items = [
+        SystemRoleContactItem(
+            id=user_id,
+            display_name=payload["display_name"],
+            primary_department=payload["primary_department"],
+            matched_roles=[
+                SystemRoleContactRoleItem(code=code, name=payload["matched_role_map"][code])
+                for code in normalized_codes
+                if code in payload["matched_role_map"]
+            ],
+        )
+        for user_id, payload in contact_map.items()
+    ]
+    items.sort(key=lambda item: (item.display_name.lower(), str(item.id)))
+    return SystemRoleContactsResponse(requested_roles=requested_roles, items=items, total=len(items))
 
 
 def list_admin_categories(db: Session) -> list[CategoryItem]:

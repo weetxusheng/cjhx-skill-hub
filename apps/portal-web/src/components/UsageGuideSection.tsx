@@ -40,7 +40,7 @@ export function UsageGuideSection({
             ),
             children: (
               <div className="usage-guide-grid">
-                <div className="usage-guide-card">
+                {/* <div className="usage-guide-card">
                   <div className="usage-guide-card-head">
                     <div>
                       <strong>标准平台指引</strong>
@@ -55,7 +55,7 @@ export function UsageGuideSection({
                     </Button>
                   </div>
                   <pre className="usage-guide-code">{usageGuide.agent.standard_prompt}</pre>
-                </div>
+                </div> */}
                 <div className="usage-guide-card">
                   <div className="usage-guide-card-head">
                     <div>
@@ -101,7 +101,7 @@ export function UsageGuideSection({
                   </div>
                   <pre className="usage-guide-code">{usageGuide.human.standard_command}</pre>
                 </div>
-                <div className="usage-guide-card">
+                {/* <div className="usage-guide-card">
                   <div className="usage-guide-card-head">
                     <div>
                       <strong>加速下载命令</strong>
@@ -132,7 +132,7 @@ export function UsageGuideSection({
                     </Button>
                   </div>
                   <pre className="usage-guide-code">{usageGuide.human.post_install_command}</pre>
-                </div>
+                </div> */}
               </div>
             ),
           },

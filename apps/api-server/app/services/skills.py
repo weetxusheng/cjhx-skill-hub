@@ -28,6 +28,7 @@ from app.repositories.skills import (
     get_review_records_for_skill,
     get_review_records_for_version,
     get_review_history,
+    get_scope_assignee_details,
     get_scope_assignees,
     get_skill_detail_by_id,
     get_skill_detail_by_slug,
@@ -646,19 +647,23 @@ def get_review_queue(
 ) -> list[AdminReviewListItem]:
     """返回当前用户可见的审核队列。"""
     rows = get_skill_pending_reviews(db, category=category, created_by=created_by)
-    return [
-        AdminReviewListItem.model_validate(
-            {
-                **row,
-                "assigned_reviewers": get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="reviewer", target_type="user")
-                + get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="reviewer", target_type="role"),
-                "assigned_publishers": get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="publisher", target_type="user")
-                + get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="publisher", target_type="role"),
-            }
+    payload: list[AdminReviewListItem] = []
+    for row in rows:
+        if not has_skill_scope_access(db, skill_id=row["skill_id"], current_user=current_user, allowed_scopes=REVIEW_SCOPES):
+            continue
+        reviewer_details = get_scope_assignee_details(db, skill_id=str(row["skill_id"]), scope="reviewer")
+        payload.append(
+            AdminReviewListItem.model_validate(
+                {
+                    **row,
+                    "assigned_reviewers": [item["target_name"] for item in reviewer_details],
+                    "assigned_reviewer_details": reviewer_details,
+                    "assigned_publishers": get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="publisher", target_type="user")
+                    + get_scope_assignees(db, skill_id=str(row["skill_id"]), scope="publisher", target_type="role"),
+                }
+            )
         )
-        for row in rows
-        if has_skill_scope_access(db, skill_id=row["skill_id"], current_user=current_user, allowed_scopes=REVIEW_SCOPES)
-    ]
+    return payload
 
 
 def get_pending_releases(db: Session, *, current_user: CurrentUser) -> list[PendingReleaseItem]:

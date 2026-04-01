@@ -121,6 +121,18 @@ body {
   border-radius: 4px;
 }
 
+#admin-reviews-table-container {
+  overflow-x: auto;
+}
+
+#admin-reviews-table-container .ant-table-wrapper {
+  min-width: 0;
+}
+
+#admin-reviews-table-container .ant-table-cell {
+  word-break: break-word;
+}
+
 /* Make all AntD cards less rounded */
 .ant-card {
   border-radius: 4px !important;
@@ -220,6 +232,10 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.scope-assignee-tag {
+  margin-inline-end: 0 !important;
 }
 
 .detail-card-stack {

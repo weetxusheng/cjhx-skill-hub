@@ -1,7 +1,8 @@
 /**
  * 组件约定：
  * - 前台上传中心抽屉统一承载 ZIP 拖拽上传和“我的上传记录”，不暴露后台版本治理概念。
- * - 打开时读取当前用户自己的上传记录；上传成功后只刷新公共列表和投稿记录。
+ * - 打开时读取当前用户自己的上传记录；无投稿权限时额外查询可联系的系统角色人员。
+ * - 上传成功后只刷新公共列表和投稿记录。
  */
 import { InboxOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import dayjs from "dayjs";
 import { useState } from "react";
 
 import { apiRequest } from "../lib/api";
-import type { PagedResponse, PortalUploadRecordItem } from "../lib/portalTypes";
+import type { PagedResponse, PortalUploadRecordItem, SystemRoleContactsResponse } from "../lib/portalTypes";
 import { formatReviewStatusLabel, reviewStatusTagColor } from "../lib/versionStatusLabels";
 
 export function PortalUploadCenterDrawer({
@@ -33,6 +34,15 @@ export function PortalUploadCenterDrawer({
     enabled: open && Boolean(accessToken),
     queryFn: () =>
       apiRequest<PagedResponse<PortalUploadRecordItem>>("/public/upload-center/records?page=1&page_size=20", {
+        token: accessToken,
+      }),
+  });
+
+  const systemRoleContactsQuery = useQuery({
+    queryKey: ["system-role-contacts", accessToken, "admin"],
+    enabled: open && Boolean(accessToken) && !canUpload,
+    queryFn: () =>
+      apiRequest<SystemRoleContactsResponse>("/public/system-role-contacts?role_code=admin", {
         token: accessToken,
       }),
   });
@@ -74,9 +84,12 @@ export function PortalUploadCenterDrawer({
     uploadMutation.mutate(file);
   };
 
+  const adminContacts = systemRoleContactsQuery.data?.items ?? [];
+  const adminContactNames = adminContacts.map((item) => item.display_name).join(", ");
+
   return (
     <Drawer
-      title="前台上传中心"
+      title="技能上传"
       width={560}
       open={open}
       onClose={onClose}
@@ -84,14 +97,14 @@ export function PortalUploadCenterDrawer({
     >
       <div className="upload-center-shell">
         <div id="portal-upload-center-header" className="upload-center-hero">
-          <Typography.Title level={4}>直接提交 ZIP，管理员来处理版本规划</Typography.Title>
+          <Typography.Title level={4}>上传技能包，查看投稿进度</Typography.Title>
           <Typography.Paragraph>
-            这里不再要求你判断待审核、待发布或线上版本。你只要上传技能包，下面查看自己的投稿记录，后续由管理员在后台继续审核和发布。
+            用于提交技能 ZIP，并集中查看你的投稿记录与处理结果。审核、发布等后续流程由平台统一处理。
           </Typography.Paragraph>
           <div className="upload-center-hints">
-            <span>支持拖拽 ZIP 或点击选择</span>
-            <span>根目录必须包含 skill.yaml 与 README.md</span>
-            <span>上传后会进入你的投稿记录</span>
+            <span>支持 ZIP 上传</span>
+            <span>需包含 skill.yaml 与 README.md</span>
+            <span>可查看投稿进度</span>
             <a href="/downloads/skill-package-demo.zip" download>
               下载示例 ZIP 模板
             </a>
@@ -104,7 +117,13 @@ export function PortalUploadCenterDrawer({
               type="info"
               showIcon
               message="当前账号还没有投稿权限"
-              description="请联系管理员开通 skill.upload 权限。权限开通后，这里会直接支持拖拽 ZIP 上传。"
+              description={
+                <div id="portal-upload-center-forbidden" className="upload-center-forbidden">
+                  <Typography.Paragraph>
+                    请联系管理员（{adminContactNames}）开通 skill.upload 权限。权限开通后，请在这里上传技能 ZIP （支持拖拽）。
+                  </Typography.Paragraph>
+                </div>
+              }
             />
           ) : (
             <>
@@ -120,14 +139,14 @@ export function PortalUploadCenterDrawer({
               >
                 <div className="upload-center-dropzone-content">
                   <InboxOutlined className="upload-center-dropzone-icon" />
-                  <Typography.Title level={5}>拖拽 ZIP 到这里</Typography.Title>
+                  <Typography.Title level={5}>技能包上传</Typography.Title>
                   <Typography.Paragraph>
-                    或点击选择后立即上传，不再额外弹一次上传窗口。
+                    拖拽 ZIP 或点击选择后立即上传
                   </Typography.Paragraph>
                 </div>
               </Upload.Dragger>
               <Typography.Text className="upload-center-record-note">
-                {uploadMutation.isPending ? "上传中，请稍候…" : "上传成功后，记录会自动刷新到下面的列表。"}
+                {uploadMutation.isPending ? "上传中，请稍候…" : ""}
               </Typography.Text>
               {uploadMutation.error ? (
                 <Alert type="error" showIcon message={(uploadMutation.error as Error).message} />
@@ -139,8 +158,7 @@ export function PortalUploadCenterDrawer({
         <div id="portal-upload-center-list" className="upload-center-list-card">
           <div className="upload-center-list-head">
             <div>
-              <Typography.Text className="results-kicker">我的上传记录</Typography.Text>
-              <Typography.Title level={5}>只看自己提交过的技能包</Typography.Title>
+              <Typography.Title level={5} className="results-kicker">我的上传记录</Typography.Title>
             </div>
           </div>
 
@@ -181,7 +199,7 @@ export function PortalUploadCenterDrawer({
               )}
             />
           ) : (
-            <Empty description="还没有上传记录，先拖一个 ZIP 技能包上来。" />
+            <Empty description={canUpload ? "还没有上传记录，先拖一个 ZIP 技能包上来。" : "当前账号暂无可查看的投稿记录。"} />
           )}
         </div>
       </div>

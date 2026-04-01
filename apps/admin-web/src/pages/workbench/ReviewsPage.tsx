@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Space, Table, Tag, Typography, message } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 
 import { ReviewVersionDetailModal } from "../../components/ReviewVersionDetailModal";
@@ -10,6 +11,7 @@ import { formatReviewStatusLabel, reviewStatusTagColor } from "../../lib/version
 import { hasPermission } from "../../lib/permissions";
 import { useAuthStore } from "../../store/auth";
 import { ReviewsFiltersCard } from "./_components/ReviewsFiltersCard";
+import { ScopeAssigneeTags, type ScopeAssigneeItem } from "./_components/ScopeAssigneeTags";
 
 type ReviewItem = {
   version_id: string;
@@ -24,6 +26,7 @@ type ReviewItem = {
   latest_review_comment: string | null;
   latest_action_at: string | null;
   assigned_reviewers: string[];
+  assigned_reviewer_details: ScopeAssigneeItem[];
   assigned_publishers: string[];
 };
 
@@ -128,6 +131,81 @@ export function ReviewsPage() {
     void queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
   };
 
+  const columns = useMemo<ColumnsType<ReviewItem>>(
+    () => [
+      {
+        title: "技能",
+        dataIndex: "skill_name",
+        width: 220,
+        render: (_: string, record: ReviewItem) => (
+          <Button
+            type="link"
+            style={{ paddingInline: 0, textAlign: "left", whiteSpace: "normal", height: "auto" }}
+            onClick={() => setDetailVersionId(record.version_id)}
+          >
+            {record.skill_name}
+          </Button>
+        ),
+      },
+      { title: "版本", dataIndex: "version", width: 88 },
+      { title: "分类", dataIndex: "category_name", width: 104 },
+      { title: "提交人", dataIndex: "created_by_display_name", width: 132 },
+      {
+        title: "审核负责人",
+        dataIndex: "assigned_reviewer_details",
+        width: 180,
+        render: (value: ScopeAssigneeItem[] | null | undefined) => <ScopeAssigneeTags items={value} />,
+      },
+      {
+        title: "最近说明",
+        dataIndex: "latest_review_comment",
+        width: 180,
+        render: (value: string | null) => value || "-",
+      },
+      {
+        title: "版本状态",
+        dataIndex: "review_status",
+        width: 96,
+        render: (value: string) => (
+          <Tag color={reviewStatusTagColor(value)}>{formatReviewStatusLabel(value)}</Tag>
+        ),
+      },
+      {
+        title: "提交时间",
+        dataIndex: "created_at",
+        width: 140,
+        render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm"),
+      },
+      {
+        title: "最近动作时间",
+        dataIndex: "latest_action_at",
+        width: 140,
+        render: (value: string | null) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "-"),
+      },
+      {
+        title: "操作",
+        width: 220,
+        render: (_: unknown, record: ReviewItem) =>
+          canReview ? (
+            <Space size={8} wrap>
+              <Button size="small" onClick={() => setDetailVersionId(record.version_id)}>
+                详情编辑
+              </Button>
+              <Button size="small" onClick={() => setActionState({ versionId: record.version_id, action: "approve" })}>
+                通过
+              </Button>
+              <Button size="small" danger onClick={() => setActionState({ versionId: record.version_id, action: "reject" })}>
+                拒绝
+              </Button>
+            </Space>
+          ) : (
+            <Typography.Text type="secondary">仅查看</Typography.Text>
+          ),
+      },
+    ],
+    [canReview, setActionState, setDetailVersionId],
+  );
+
   return (
     <>
       <ReviewsFiltersCard
@@ -155,69 +233,8 @@ export function ReviewsPage() {
               rowKey="version_id"
               pagination={false}
               dataSource={filteredReviews}
-              columns={[
-                {
-                  title: "技能",
-                  dataIndex: "skill_name",
-                  render: (_: string, record: ReviewItem) => (
-                    <Button type="link" style={{ paddingInline: 0 }} onClick={() => setDetailVersionId(record.version_id)}>
-                      {record.skill_name}
-                    </Button>
-                  ),
-                },
-                { title: "版本", dataIndex: "version" },
-                { title: "分类", dataIndex: "category_name" },
-                { title: "提交人", dataIndex: "created_by_display_name" },
-                {
-                  title: "审核负责人",
-                  dataIndex: "assigned_reviewers",
-                  render: (value: string[] | null | undefined) => {
-                    const items = value ?? [];
-                    return items.length ? items.map((item) => <Tag key={item}>{item}</Tag>) : <Typography.Text type="secondary">未配置</Typography.Text>;
-                  },
-                },
-                {
-                  title: "最近说明",
-                  dataIndex: "latest_review_comment",
-                  render: (value: string | null) => value || "-",
-                },
-                {
-                  title: "版本状态",
-                  dataIndex: "review_status",
-                  render: (value: string) => (
-                    <Tag color={reviewStatusTagColor(value)}>{formatReviewStatusLabel(value)}</Tag>
-                  ),
-                },
-                {
-                  title: "提交时间",
-                  dataIndex: "created_at",
-                  render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm"),
-                },
-                {
-                  title: "最近动作时间",
-                  dataIndex: "latest_action_at",
-                  render: (value: string | null) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "-"),
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, record: ReviewItem) =>
-                    canReview ? (
-                      <Space size={8}>
-                        <Button size="small" onClick={() => setDetailVersionId(record.version_id)}>
-                          详情编辑
-                        </Button>
-                        <Button size="small" onClick={() => setActionState({ versionId: record.version_id, action: "approve" })}>
-                          通过
-                        </Button>
-                        <Button size="small" danger onClick={() => setActionState({ versionId: record.version_id, action: "reject" })}>
-                          拒绝
-                        </Button>
-                      </Space>
-                    ) : (
-                      <Typography.Text type="secondary">仅查看</Typography.Text>
-                    ),
-                },
-              ]}
+              columns={columns}
+              scroll={{ x: 1500 }}
             />
           </div>
         )}
