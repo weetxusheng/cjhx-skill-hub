@@ -44,6 +44,27 @@ export type PortalUploadRecordItem = {
   updated_at: string;
 };
 
+export type SystemRoleContactRoleItem = {
+  code: string;
+  name: string;
+};
+
+export type SystemRoleContactItem = {
+  id: string;
+  display_name: string;
+  primary_department: {
+    id: string;
+    name: string;
+  } | null;
+  matched_roles: SystemRoleContactRoleItem[];
+};
+
+export type SystemRoleContactsResponse = {
+  requested_roles: SystemRoleContactRoleItem[];
+  items: SystemRoleContactItem[];
+  total: number;
+};
+
 export type PagedResponse<T> = {
   items: T[];
   total: number;

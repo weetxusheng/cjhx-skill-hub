@@ -173,6 +173,11 @@ def test_public_upload_center_records_require_login(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_system_role_contacts_require_login(client: TestClient) -> None:
+    response = client.get("/api/public/system-role-contacts?role_code=admin")
+    assert response.status_code == 401
+
+
 def test_upload_center_records_only_show_current_users_uploads(client: TestClient, db_session: Session) -> None:
     scoped_user = _create_user_with_permissions(
         db_session,
@@ -218,3 +223,23 @@ def test_upload_center_records_only_show_current_users_uploads(client: TestClien
     assert payload["items"][0]["skill_slug"] == "visible-uploaded-skill"
     assert payload["items"][0]["version"] == "1.1.0"
     assert payload["items"][0]["review_status"] == "submitted"
+
+
+def test_upload_center_forbidden_user_can_fetch_admin_contacts(client: TestClient, db_session: Session) -> None:
+    viewer_user = _create_user_with_permissions(
+        db_session,
+        username="upload_forbidden_user",
+        permission_codes=[],
+    )
+    viewer_tokens = _login(client, viewer_user.username, "Pass123!")
+    headers = {"Authorization": f"Bearer {viewer_tokens['access_token']}"}
+
+    contacts_response = client.get("/api/public/system-role-contacts?role_code=admin", headers=headers)
+    assert contacts_response.status_code == 200
+
+    admin_user = _admin_user(db_session)
+    payload = contacts_response.json()["data"]
+    assert payload["requested_roles"] == [{"code": "admin", "name": "管理员"}]
+    assert payload["total"] == 1
+    assert payload["items"][0]["display_name"] == admin_user.display_name
+    assert payload["items"][0]["matched_roles"] == [{"code": "admin", "name": "管理员"}]

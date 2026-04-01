@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+from uuid import UUID
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from app.models.skill_role_grant import SkillRoleGrant
 from app.models.skill_user_grant import SkillUserGrant
 from app.models.skill_version import SkillVersion
 from app.models.user import User
+from app.models.user_role import UserRole
 from app.models.version_review import VersionReview
 
 PublicSkillSort = Literal["latest", "downloads", "favorites", "name"]
@@ -587,6 +589,61 @@ def get_scope_assignees(db: Session, *, skill_id: str, scope: str, target_type: 
             .order_by(Role.name.asc())
         )
     return list(db.execute(query).scalars())
+
+
+def get_scope_assignee_details(db: Session, *, skill_id: str, scope: str) -> list[dict]:
+    """返回指定 skill scope 下已分配对象详情；角色项附带当前成员名单。"""
+    user_query = (
+        select(
+            User.id.label("target_id"),
+            User.display_name.label("target_name"),
+        )
+        .join(SkillUserGrant, SkillUserGrant.user_id == User.id)
+        .where(SkillUserGrant.skill_id == skill_id, SkillUserGrant.permission_scope == scope)
+        .order_by(User.display_name.asc())
+    )
+    user_items = [
+        {
+            "target_id": row.target_id,
+            "target_type": "user",
+            "target_name": row.target_name,
+            "members": [],
+        }
+        for row in db.execute(user_query)
+    ]
+
+    role_query = (
+        select(
+            Role.id.label("target_id"),
+            Role.name.label("target_name"),
+        )
+        .join(SkillRoleGrant, SkillRoleGrant.role_id == Role.id)
+        .where(SkillRoleGrant.skill_id == skill_id, SkillRoleGrant.permission_scope == scope)
+        .order_by(Role.name.asc())
+    )
+    role_rows = list(db.execute(role_query))
+    role_ids = [row.target_id for row in role_rows]
+    role_member_map: dict[UUID, list[str]] = {role_id: [] for role_id in role_ids}
+    if role_ids:
+        member_rows = db.execute(
+            select(UserRole.role_id, User.display_name)
+            .join(User, User.id == UserRole.user_id)
+            .where(UserRole.role_id.in_(role_ids), User.status == "active")
+            .order_by(User.display_name.asc())
+        )
+        for role_id, display_name in member_rows:
+            role_member_map.setdefault(role_id, []).append(display_name)
+
+    role_items = [
+        {
+            "target_id": row.target_id,
+            "target_type": "role",
+            "target_name": row.target_name,
+            "members": role_member_map.get(row.target_id, []),
+        }
+        for row in role_rows
+    ]
+    return [*user_items, *role_items]
 
 
 def is_skill_favorited(db: Session, user_id: str, skill_id: str) -> bool:

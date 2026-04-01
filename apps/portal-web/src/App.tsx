@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Drawer, Form, Input, Layout, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 
 import { apiRequest } from "./lib/api";
 import { hasPermission } from "./lib/portalPermissions";
@@ -22,6 +22,7 @@ import { usePortalAuthStore } from "./store/auth";
  */
 export default function App() {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { accessToken, user, setSession, clearSession } = usePortalAuthStore();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -127,6 +128,38 @@ export default function App() {
       }
     };
   }, [ssoMutation.isPending]);
+
+  useEffect(() => {
+    if (!location.hash) {
+      return;
+    }
+
+    let attempts = 0;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    const targetId = decodeURIComponent(location.hash.slice(1));
+
+    const scrollToHashTarget = () => {
+      const target = document.getElementById(targetId);
+      if (!target) {
+        attempts += 1;
+        if (attempts < 8) {
+          timerId = setTimeout(scrollToHashTarget, 60);
+        }
+        return;
+      }
+      const header = document.querySelector(".site-header");
+      const headerOffset = header instanceof HTMLElement ? header.offsetHeight + 12 : 12;
+      const top = window.scrollY + target.getBoundingClientRect().top - headerOffset;
+      window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+    };
+
+    timerId = setTimeout(scrollToHashTarget, 0);
+    return () => {
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [location.hash, location.pathname]);
 
   // “我要上传”优先留在前台：未登录先拉起登录抽屉，已登录直接进入上传中心。
   const handlePortalUploadEntry = () => {

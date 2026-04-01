@@ -30,6 +30,7 @@
 - `FormData` 上传不得手写 `Content-Type`
 - 需登录接口传 `Authorization: Bearer <access_token>`
 - 前端 `apiRequest` 只取响应体中的 `data`
+- 前台系统角色联系人：`GET /api/public/system-role-contacts?role_code=admin&role_code=reviewer`，需登录，支持按多个系统角色查询并返回去重后的联系人列表
 - 二进制下载（如后台 `GET /api/admin/versions/{version_id}/package`）不走 `apiRequest` JSON 解包，使用 `fetch` + Blob 触发保存；不计入前台 `download_count`
 - 公开健康检查路径在 `/health/*`，不与业务接口混用
 - 门户主系统单点：`POST /api/auth/sso-portal`，体为 `{ "loginname": "<hex>", "sign": "<string>" }`，成功响应与密码登录相同；细节见 [`sso-portal-gateway.md`](./sso-portal-gateway.md)
@@ -72,6 +73,7 @@ pnpm release:check
 ## 当前必须覆盖的回归线
 - 上传 -> 提审 -> 审核 -> 待发布 -> 发布 -> 回滚
 - 前台上传中心直传 ZIP 与“我的上传记录”
+- 系统角色联系人接口与上传中心无权限联系人展示
 - skill 级授权与 capability
 - 收藏 / 点赞 / 下载统计一致性
 - 审核中心、待发布、处理记录可达性

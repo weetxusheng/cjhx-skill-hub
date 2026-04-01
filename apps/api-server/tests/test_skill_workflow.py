@@ -734,6 +734,7 @@ def test_public_skill_detail_ignores_invalid_optional_token(client: TestClient, 
 
 def test_review_release_and_history_queues_follow_database_state(client: TestClient, db_session: Session) -> None:
     admin_user = _admin_user(db_session)
+    reviewer_user = _create_user_with_role(db_session, "reviewer", "queue_reviewer")
     create_skill_version_record(
         db_session,
         owner=admin_user,
@@ -779,6 +780,15 @@ def test_review_release_and_history_queues_follow_database_state(client: TestCli
     assert pending_reviews.status_code == 200
     review_items = pending_reviews.json()["data"]
     assert any(item["skill_slug"] == "workflow-copilot" and item["version"] == "1.6.0" for item in review_items)
+    workflow_review_item = next(item for item in review_items if item["skill_slug"] == "workflow-copilot" and item["version"] == "1.6.0")
+    assert workflow_review_item["assigned_reviewer_details"] == [
+        {
+            "target_id": workflow_review_item["assigned_reviewer_details"][0]["target_id"],
+            "target_type": "role",
+            "target_name": "审核员",
+            "members": [reviewer_user.display_name],
+        }
+    ]
 
     pending_releases = client.get(
         "/api/admin/releases/pending",

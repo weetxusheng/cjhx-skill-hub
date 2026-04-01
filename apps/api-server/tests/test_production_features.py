@@ -220,6 +220,51 @@ def test_admin_users_roles_and_audit_logs_support_pagination_and_options(client:
     assert audit_payload["items"][0]["target_type"] == "category"
 
 
+def test_system_role_contacts_support_multiple_roles_and_deduplicate_users(client: TestClient, db_session: Session) -> None:
+    admin = _login(client, "admin", "ChangeMe123!")
+    headers = {"Authorization": f"Bearer {admin['access_token']}"}
+    admin_user = db_session.execute(select(User).where(User.username == "admin")).scalar_one()
+
+    multi_role_user = _create_user_with_role(db_session, "reviewer", "multi_role_contact")
+    admin_role_id = db_session.execute(select(Role.id).where(Role.code == "admin")).scalar_one()
+    db_session.add(UserRole(user_id=multi_role_user.id, role_id=admin_role_id))
+
+    _create_user_with_role(db_session, "reviewer", "reviewer_only_contact")
+    disabled_user = _create_user_with_role(db_session, "admin", "disabled_admin_contact")
+    disabled_user.status = "disabled"
+    db_session.commit()
+
+    response = client.get(
+        "/api/public/system-role-contacts?role_code=reviewer&role_code=admin",
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    payload = response.json()["data"]
+    assert payload["requested_roles"] == [
+        {"code": "reviewer", "name": "审核员"},
+        {"code": "admin", "name": "管理员"},
+    ]
+    by_name = {item["display_name"]: item for item in payload["items"]}
+
+    assert "disabled_admin_contact" not in by_name
+    assert by_name[admin_user.display_name]["matched_roles"] == [{"code": "admin", "name": "管理员"}]
+    assert by_name["multi_role_contact"]["matched_roles"] == [
+        {"code": "reviewer", "name": "审核员"},
+        {"code": "admin", "name": "管理员"},
+    ]
+    assert by_name["reviewer_only_contact"]["matched_roles"] == [{"code": "reviewer", "name": "审核员"}]
+
+
+def test_system_role_contacts_reject_non_system_roles(client: TestClient) -> None:
+    admin = _login(client, "admin", "ChangeMe123!")
+    headers = {"Authorization": f"Bearer {admin['access_token']}"}
+
+    response = client.get("/api/public/system-role-contacts?role_code=ops-curator", headers=headers)
+    assert response.status_code == 400
+    assert "系统角色不存在或不可用" in response.json()["detail"]
+
+
 def test_admin_can_view_user_skill_grants_from_user_management(client: TestClient, db_session: Session) -> None:
     admin = _login(client, "admin", "ChangeMe123!")
     headers = {"Authorization": f"Bearer {admin['access_token']}"}

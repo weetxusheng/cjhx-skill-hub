@@ -165,27 +165,29 @@ export function ReviewVersionDetailModal({ open, versionId, token, onClose }: Re
               <Form.Item label="安装说明" name="install_notes">
                 <Input.TextArea rows={3} />
               </Form.Item>
+              {/*
               <Form.Item label="破坏性变更" name="breaking_changes">
                 <Input.TextArea rows={3} />
               </Form.Item>
+              */}
               <Form.Item label="README Markdown" name="readme_markdown">
                 <Input.TextArea rows={10} />
               </Form.Item>
-              <Form.Item label="Agent 标准提示词" name={["usage_guide_json", "agent", "standard_prompt"]}>
+              {/* <Form.Item label="Agent 标准提示词" name={["usage_guide_json", "agent", "standard_prompt"]}>
                 <Input.TextArea rows={4} />
-              </Form.Item>
+              </Form.Item> */}
               <Form.Item label="Agent 加速提示词" name={["usage_guide_json", "agent", "accelerated_prompt"]}>
                 <Input.TextArea rows={4} />
               </Form.Item>
               <Form.Item label="Human 标准命令" name={["usage_guide_json", "human", "standard_command"]}>
                 <Input.TextArea rows={2} />
               </Form.Item>
-              <Form.Item label="Human 加速命令" name={["usage_guide_json", "human", "accelerated_command"]}>
+              {/* <Form.Item label="Human 加速命令" name={["usage_guide_json", "human", "accelerated_command"]}>
                 <Input.TextArea rows={2} />
-              </Form.Item>
-              <Form.Item label="Human 安装后命令" name={["usage_guide_json", "human", "post_install_command"]}>
+              </Form.Item> */}
+              {/* <Form.Item label="Human 安装后命令" name={["usage_guide_json", "human", "post_install_command"]}>
                 <Input.TextArea rows={3} />
-              </Form.Item>
+              </Form.Item> */}
               {updateMutation.error ? <Alert type="error" showIcon message={(updateMutation.error as Error).message} /> : null}
               <Button type="primary" htmlType="submit" loading={updateMutation.isPending}>
                 保存版本文案
